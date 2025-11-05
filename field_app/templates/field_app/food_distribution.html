@@ -52,9 +52,74 @@ document.addEventListener('DOMContentLoaded', function () {
     const video = document.getElementById('video');
     const form = document.getElementById('distribution-form');
     const loginIdInput = document.getElementById('login_id_input');
-    // ... (カメラ起動とtick関数のロジックはshelter_checkin.htmlからコピー) ...
+    // ... (カメラ起動とtick関数のロジックはshelter_checkin.htmlからコピー)
 
     function handleQrCode(qrData) {
+        // select要素が選択されているかチェック
+        const selectedItemId = form.elements['item_id'].value;
+        if (!selectedItemId) {
+            alert('エラー: 先に配布物資を選択してください。');
+            // 連続スキャンを防ぐためにクールダウンタイマーをリセット
+            lastQrCode = null;
+            return;
+        }
+
+        console.log(`Scanned QR: ${qrData}, Selected Item ID: ${selectedItemId}`);
+        loginIdInput.value = qrData;
+        form.submit(); // 読み取ったらすぐにフォームを送信
+    }
+
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+        .then(function (stream) {
+            video.srcObject = stream;
+            video.setAttribute("playsinline", true); // iOS Safari対策
+            video.play();
+            requestAnimationFrame(tick);
+        })
+        .catch(function (err) {
+            console.error("カメラへのアクセスエラー:", err);
+            statusMessage.textContent = "カメラにアクセスできませんでした。";
+        });
+
+    function tick() {
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            const canvasElement = document.createElement('canvas');
+            const canvas = canvasElement.getContext("2d");
+            canvasElement.height = video.videoHeight;
+            canvasElement.width = video.videoWidth;
+            canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
+            const imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
+
+            // jsQRでQRコードをスキャン
+            const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                inversionAttempts: "dontInvert",
+            });
+
+            if (code) {
+                // 5秒間のクールダウン処理
+                const now = Date.now();
+                if (code.data !== lastQrCode || now - lastScanTime > 5000) {
+                    lastQrCode = code.data;
+                    lastScanTime = now;
+                    handleQrCode(code.data);
+                }
+            }
+        }
+        requestAnimationFrame(tick);
+    }
+
+
+    function handleQrCode(qrData) {
+        // select要素が選択されているかチェック
+        const selectedItemId = form.elements['item_id'].value;
+        if (!selectedItemId) {
+            alert('エラー: 先に配布物資を選択してください。');
+            // 連続スキャンを防ぐためにクールダウンタイマーをリセット
+            lastQrCode = null;
+            return;
+        }
+
+        console.log(`Scanned QR: ${qrData}, Selected Item ID: ${selectedItemId}`);
         loginIdInput.value = qrData;
         form.submit(); // 読み取ったらすぐにフォームを送信
     }
