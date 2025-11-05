@@ -1,0 +1,63 @@
+{% extends 'field_app/base.html' %}
+{% load static %}
+
+{% block title %}炊き出し確認{% endblock %}
+{% block header_title %}炊き出し確認 (2重防止){% endblock %}
+
+{% block content %}
+<div class="flex-1 flex flex-col p-4 space-y-4">
+    <div class="bg-gray-700 p-6 rounded-lg shadow-xl">
+        <form id="distribution-form" method="post" class="space-y-4">
+            {% csrf_token %}
+            <input type="hidden" name="login_id" id="login_id_input">
+
+            <!-- 1. 配布物資の選択 -->
+            <div>
+                <label class="block text-xl font-semibold mb-2 text-yellow-300">1. 配布物資を選択</label>
+                <select name="item_id" class="p-3 w-full border rounded-md bg-gray-600 text-white focus:outline-none focus:ring focus:ring-yellow-400">
+                    {% for item in distribution_items %}
+                        <option value="{{ item.id }}" {% if item.id|stringformat:"s" == last_query.item_id %}selected{% endif %}>{{ item.name }}</option>
+                    {% empty %}
+                        <option value="">物資リストを取得できませんでした</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- 2. QRコードスキャン -->
+            <div>
+                <label class="block text-xl font-semibold mb-2 text-gray-300">2. QRコードをスキャンして判定</label>
+                <div id="video-container" class="bg-gray-800 h-64 rounded-lg flex items-center justify-center text-gray-500 border-4 border-dashed border-gray-600">
+                    <video id="video" class="w-full h-full object-cover"></video>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- 判定結果表示エリア -->
+    {% if api_result %}
+    <div class="p-4 text-center rounded-lg {% if api_result.can_distribute %}bg-green-800 border-green-600{% else %}bg-red-800 border-red-600{% endif %} border-2">
+        <p class="text-2xl font-bold text-white">【判定結果】{{ api_result.message }}</p>
+        <p class="text-sm text-gray-300">問い合わせID: {{ last_query.login_id }}</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block body_extra %}
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script>
+// shelter_checkin.html とほぼ同じJavaScriptロジック
+// handleQrCode関数がフォームを送信するだけ
+document.addEventListener('DOMContentLoaded', function () {
+    const video = document.getElementById('video');
+    const form = document.getElementById('distribution-form');
+    const loginIdInput = document.getElementById('login_id_input');
+    // ... (カメラ起動とtick関数のロジックはshelter_checkin.htmlからコピー) ...
+
+    function handleQrCode(qrData) {
+        loginIdInput.value = qrData;
+        form.submit(); // 読み取ったらすぐにフォームを送信
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,151 @@
+{% extends 'field_app/base.html' %}
+{% load static %}
+
+{% block title %}避難所受付{% endblock %}
+{% block header_title %}避難所受付 (入退所記録){% endblock %}
+
+{% block content %}
+<div class="flex-1 flex flex-col p-4 space-y-4">
+
+    <!-- 操作フォーム -->
+    <div class="bg-gray-700 p-6 rounded-lg shadow-xl">
+        <form id="checkin-form" method="post" class="space-y-4">
+            {% csrf_token %}
+            <!-- JavaScriptが読み取ったlogin_idをセットする隠しフィールド -->
+            <input type="hidden" name="login_id" id="login_id_input">
+            <!-- 選択された種別をセットする隠しフィールド -->
+            <input type="hidden" name="checkin_type" id="checkin_type_input">
+
+            <!-- 1. 入退所種別の選択 -->
+            <div>
+                <label class="block text-xl font-semibold mb-2 text-indigo-300">1. 種別を選択</label>
+                <div class="grid grid-cols-2 gap-4">
+                    <button type="button" id="btn-checkin" class="action-button bg-green-700 hover:bg-green-600 text-white">入所</button>
+                    <button type="button" id="btn-checkout" class="action-button bg-red-700 hover:bg-red-600 text-white">退所</button>
+                </div>
+            </div>
+
+            <!-- 2. QRコードスキャンエリア -->
+            <div>
+                <label class="block text-xl font-semibold mb-2 text-gray-300">2. QRコードをスキャン</label>
+                <div id="video-container" class="bg-gray-800 h-64 rounded-lg flex items-center justify-center text-gray-500 border-4 border-dashed border-gray-600">
+                    <video id="video" class="w-full h-full object-cover"></video>
+                </div>
+                <div id="status-message" class="text-center mt-2 font-semibold text-yellow-300 h-6"></div>
+            </div>
+        </form>
+    </div>
+
+    <!-- 直近の記録リスト -->
+    <div class="bg-gray-700 p-6 rounded-lg shadow-xl flex-1">
+        <h3 class="text-lg font-semibold mb-2">直近の記録 (5件)</h3>
+        <ul class="space-y-1 text-gray-300">
+            {% for record in recent_checkins %}
+            <li class="p-2 rounded {% if record.checkin_type == 'checkin' %} bg-green-900/50 {% else %} bg-red-900/50 {% endif %}">
+                <span class="font-mono text-sm">{{ record.timestamp|date:"H:i:s" }}</span> -
+                <strong>ID: {{ record.login_id }}</strong>
+                ({{ record.get_checkin_type_display }})
+                {% if record.is_synced %}<span class="text-xs text-green-400 ml-2">(同期済)</span>{% endif %}
+            </li>
+            {% empty %}
+            <li>まだ記録はありません。</li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endblock %}
+
+{% block body_extra %}
+<!-- QRコードスキャンライブラリ (jsQR) -->
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const video = document.getElementById('video');
+    const statusMessage = document.getElementById('status-message');
+    const form = document.getElementById('checkin-form');
+    const loginIdInput = document.getElementById('login_id_input');
+    const checkinTypeInput = document.getElementById('checkin_type_input');
+    const btnCheckin = document.getElementById('btn-checkin');
+    const btnCheckout = document.getElementById('btn-checkout');
+    const videoContainer = document.getElementById('video-container');
+
+    let selectedType = null;
+    let lastQrCode = null;
+    let lastScanTime = 0;
+
+    // --- 種別選択ボタンの処理 ---
+    btnCheckin.addEventListener('click', () => {
+        selectedType = 'checkin';
+        checkinTypeInput.value = selectedType;
+        videoContainer.style.borderColor = '#4ade80'; // green-400
+        btnCheckin.classList.add('ring-4', 'ring-green-400');
+        btnCheckout.classList.remove('ring-4', 'ring-red-400');
+        statusMessage.textContent = '「入所」を選択しました。QRコードをスキャンしてください。';
+    });
+
+    btnCheckout.addEventListener('click', () => {
+        selectedType = 'checkout';
+        checkinTypeInput.value = selectedType;
+        videoContainer.style.borderColor = '#f87171'; // red-400
+        btnCheckout.classList.add('ring-4', 'ring-red-400');
+        btnCheckin.classList.remove('ring-4', 'ring-green-400');
+        statusMessage.textContent = '「退所」を選択しました。QRコードをスキャンしてください。';
+    });
+
+    // --- カメラとQRスキャンの処理 ---
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+        .then(function (stream) {
+            video.srcObject = stream;
+            video.setAttribute("playsinline", true); // iOS Safari対策
+            video.play();
+            requestAnimationFrame(tick);
+        })
+        .catch(function (err) {
+            console.error("カメラへのアクセスエラー:", err);
+            statusMessage.textContent = "カメラにアクセスできませんでした。";
+        });
+
+    function tick() {
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            const canvasElement = document.createElement('canvas');
+            const canvas = canvasElement.getContext("2d");
+            canvasElement.height = video.videoHeight;
+            canvasElement.width = video.videoWidth;
+            canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
+            const imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
+
+            // jsQRでQRコードをスキャン
+            const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                inversionAttempts: "dontInvert",
+            });
+
+            if (code) {
+                // 5秒間のクールダウン処理
+                const now = Date.now();
+                if (code.data !== lastQrCode || now - lastScanTime > 5000) {
+                    lastQrCode = code.data;
+                    lastScanTime = now;
+                    handleQrCode(code.data);
+                }
+            }
+        }
+        requestAnimationFrame(tick);
+    }
+
+    function handleQrCode(qrData) {
+        if (!selectedType) {
+            statusMessage.textContent = 'エラー: 先に「入所」か「退所」を選択してください。';
+            // 枠を赤くしてエラーを知らせる
+            videoContainer.style.borderColor = '#ef4444'; // red-500
+            return;
+        }
+
+        statusMessage.textContent = `ID: ${qrData} を読み取りました。記録しています...`;
+        loginIdInput.value = qrData;
+
+        // フォームを自動送信
+        form.submit();
+    }
+});
+</script>
+{% endblock %}

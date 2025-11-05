@@ -1,0 +1,32 @@
+{% extends 'field_app/base.html' %}
+
+{% block title %}現場職員ログイン{% endblock %}
+{% block header_title %}現場職員ログイン{% endblock %}
+
+{% block content %}
+<div class="flex-1 flex flex-col items-center justify-center p-4">
+    <div class="bg-gray-700 p-8 rounded-lg shadow-xl w-full max-w-sm">
+        
+        {% if form.errors %}
+            <div class="bg-red-500 text-white p-3 rounded-md mb-4 text-center">
+                IDまたはパスワードが正しくありません。
+            </div>
+        {% endif %}
+
+        <form method="post">
+            {% csrf_token %}
+            <div class="mb-4">
+                <label for="id_username" class="block text-gray-300">職員ID：</label>
+                <input type="text" name="username" id="id_username" class="mt-1 p-3 w-full border border-gray-600 rounded-md bg-gray-600 text-white focus:outline-none focus:ring focus:ring-blue-400" required>
+            </div>
+            <div class="mb-6">
+                <label for="id_password" class="block text-gray-300">パスワード：</label>
+                <input type="password" name="password" id="id_password" class="mt-1 p-3 w-full border border-gray-600 rounded-md bg-gray-600 text-white focus:outline-none focus:ring focus:ring-blue-400" required>
+            </div>
+            <button type="submit" class="w-full action-button bg-blue-500 text-white hover:bg-blue-600">ログイン</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block footer %}{% endblock %} {# ログイン画面ではフッターを非表示にする #}
