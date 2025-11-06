@@ -20,5 +20,7 @@ urlpatterns = [
 
     path('food/', views.food_distribution_view, name='food_distribution'),
 
+    path('report/', views.field_report_view, name='field_report'),
+
 
 ]

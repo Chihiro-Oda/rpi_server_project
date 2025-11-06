@@ -3,7 +3,8 @@ from django.contrib import messages
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required # ログイン必須にする
 
-from .models import UnsyncedCheckin
+from .forms import FieldReportForm
+from .models import UnsyncedCheckin, UnsyncedFieldReport
 
 import requests
 import config
@@ -110,3 +111,30 @@ def food_distribution_view(request):
             messages.error(request, "中央サーバーに接続できませんでした。")
 
     return render(request, 'field_app/food_distribution.html', context)
+
+
+@login_required
+def field_report_view(request):
+    """
+    現場状況報告ページの表示と、報告データの受付
+    """
+    if request.method == 'POST':
+        form = FieldReportForm(request.POST)
+        if form.is_valid():
+            # DBに保存する前に、shelter_idをセット
+            report = form.save(commit=False)
+            report.shelter_id = config.SHELTER_ID  # configから取得
+            report.save()
+            messages.success(request, '現場状況を記録しました。(オンライン時に自動で中央サーバーに送信されます)')
+            return redirect('field_app:home')  # 成功したらホームに戻る
+    else:
+        form = FieldReportForm()
+
+    # 直近の報告履歴を表示
+    recent_reports = UnsyncedFieldReport.objects.all()[:3]
+
+    context = {
+        'form': form,
+        'recent_reports': recent_reports
+    }
+    return render(request, 'field_app/field_report.html', context)

@@ -72,3 +72,39 @@ class UnsyncedCheckin(models.Model):
         verbose_name = "未同期チェックイン記録"
         verbose_name_plural = "未同期チェックイン記録"
         ordering = ['-timestamp']  # 新しい記録から順に表示
+
+
+class UnsyncedFieldReport(models.Model):
+    """
+    まだ中央サーバーに同期されていない、現場状況報告を一時的に保存するモデル。
+    """
+    FOOD_STOCK_CHOICES = (
+        ('safe', '3日以上持つ'),
+        ('warning', '1日〜3日持つ'),
+        ('critical', '本日分で尽きる'),
+    )
+
+    # 1. どの避難所から (Where)
+    shelter_id = models.IntegerField(verbose_name="避難所ID")
+
+    # 2. 報告内容 (What)
+    current_evacuees = models.PositiveIntegerField(verbose_name="現在避難者数")
+    medical_needs = models.PositiveIntegerField(verbose_name="医療・要介護者数")
+    food_stock = models.CharField(verbose_name="食料の残量", max_length=10, choices=FOOD_STOCK_CHOICES)
+
+    # 3. いつ (When)
+    timestamp = models.DateTimeField(verbose_name="報告日時", auto_now_add=True)
+
+    # 4. 誰が (Who) - 任意
+    # reported_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+
+    # 5. 同期状態 (Status)
+    is_synced = models.BooleanField(verbose_name="同期済み", default=False, db_index=True)
+
+    def __str__(self):
+        return f"[{'同期済' if self.is_synced else '未同期'}] {self.timestamp.strftime('%Y-%m-%d %H:%M')} - 避難所ID:{self.shelter_id}"
+
+    class Meta:
+        verbose_name = "未同期 現場状況報告"
+        verbose_name_plural = "未同期 現場状況報告"
+        ordering = ['-timestamp']

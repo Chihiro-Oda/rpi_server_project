@@ -1,0 +1,73 @@
+{% extends 'field_app/base.html' %}
+{% load static %}
+
+{% block title %}現場状況報告{% endblock %}
+{% block header_title %}現場状況の構造化報告{% endblock %}
+
+{% block content %}
+    <div class="flex-1 flex flex-col p-4 space-y-4">
+        <!-- 報告フォーム -->
+        <div class="bg-gray-700 p-6 rounded-lg shadow-xl">
+            <p class="text-lg mb-4 text-gray-300">避難所の現状を正確に報告してください。</p>
+
+            <form method="post" class="space-y-6">
+                {% csrf_token %}
+
+                <div>
+                    <label for="{{ form.current_evacuees.id_for_label }}"
+                           class="block text-xl font-semibold mb-2 text-green-300">{{ form.current_evacuees.label }}
+                        (必須)</label>
+                    {{ form.current_evacuees }}
+                    {% if form.current_evacuees.errors %}
+                        <p class="text-red-400 text-sm mt-1">{{ form.current_evacuees.errors.as_text }}</p>
+                    {% endif %}
+                </div>
+
+                <div>
+                    <label for="{{ form.medical_needs.id_for_label }}"
+                           class="block text-xl font-semibold mb-2 text-green-300">{{ form.medical_needs.label }}
+                        (必須)</label>
+                    {{ form.medical_needs }}
+                    {% if form.medical_needs.errors %}
+                        <p class="text-red-400 text-sm mt-1">{{ form.medical_needs.errors.as_text }}</p>
+                    {% endif %}
+                </div>
+
+                <div>
+                    <label for="{{ form.food_stock.id_for_label }}"
+                           class="block text-xl font-semibold mb-2 text-green-300">{{ form.food_stock.label }}
+                        (必須)</label>
+                    {{ form.food_stock }}
+                    {% if form.food_stock.errors %}
+                        <p class="text-red-400 text-sm mt-1">{{ form.food_stock.errors.as_text }}</p>
+                    {% endif %}
+                </div>
+
+                <button type="submit" class="w-full action-button bg-blue-500 text-white hover:bg-blue-600 mt-4">
+                    この内容で記録・送信
+                </button>
+            </form>
+        </div>
+
+        <!-- 直近の報告履歴 -->
+        <div class="bg-gray-700 p-6 rounded-lg shadow-xl flex-1">
+            <h3 class="text-lg font-semibold mb-2">最近の報告履歴</h3>
+            <ul class="space-y-2 text-gray-300">
+                {% for report in recent_reports %}
+                    <li class="p-2 rounded {% if report.is_synced %}bg-gray-800{% else %}bg-yellow-800/50{% endif %} text-sm">
+                        <div class="flex justify-between items-center">
+                            <span>{{ report.timestamp|date:"Y/m/d H:i" }} - 避難者: {{ report.current_evacuees }}人, 要介護者: {{ report.medical_needs }}人, 食料: {{ report.get_food_stock_display }}</span>
+                            {% if report.is_synced %}
+                                <span class="text-xs font-bold text-green-400">同期済</span>
+                            {% else %}
+                                <span class="text-xs font-bold text-yellow-300 animate-pulse">未同期</span>
+                            {% endif %}
+                        </div>
+                    </li>
+                {% empty %}
+                    <li>まだ報告はありません。</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+{% endblock %}
