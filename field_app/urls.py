@@ -22,5 +22,7 @@ urlpatterns = [
 
     path('report/', views.field_report_view, name='field_report'),
 
+    path('chat/', views.field_chat_view, name='field_chat'),
+
 
 ]

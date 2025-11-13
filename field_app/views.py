@@ -1,20 +1,22 @@
 # field_app/views.py
+import requests
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required  # ログイン必須にする
 from django.shortcuts import render, redirect
-from django.contrib.auth.decorators import login_required # ログイン必須にする
+from django.urls import reverse
 
+import config
 from .forms import FieldReportForm
 from .models import UnsyncedCheckin, UnsyncedFieldReport
 
-import requests
-import config
 
-@login_required # ログインしていないとアクセスできないようにする
+@login_required  # ログインしていないとアクセスできないようにする
 def home_view(request):
     """
     現場操作のホームメニュー画面を表示するビュー
     """
     return render(request, 'field_app/home.html')
+
 
 # --- 避難所受付ビュー (ガワだけ) ---
 @login_required
@@ -138,3 +140,85 @@ def field_report_view(request):
         'recent_reports': recent_reports
     }
     return render(request, 'field_app/field_report.html', context)
+
+
+@login_required
+def field_chat_view(request):
+    """
+    現場チャット画面の表示
+    """
+    # 選択されているグループIDを取得 (GETパラメータから)
+    # 例: /chat/?group_id=3
+    selected_group_id = request.GET.get('group_id', 'all')
+
+    if request.method == 'POST':
+        group_id = request.POST.get('group_id')
+        message = request.POST.get('message')
+
+        if group_id == 'all':  # "本部 (全体連絡)" が選択された場合
+            #  全体連絡用のAPIを別途実装するか、特定のグループIDを割り当てる
+            messages.info(request, "（未実装）本部への全体連絡を送信しました。")
+        elif group_id and message:
+            try:
+                headers = {'X-User-Login-Id': request.user.username}
+                payload = {'group_id': group_id, 'message': message}
+                api_url = config.CENTRAL_SERVER_URL + config.API_BASE_PATH + 'post-group-message/'
+
+                response = requests.post(api_url, headers=headers, json=payload, timeout=5)
+
+                if response.status_code == 200:
+                    messages.success(request, "メッセージを送信しました。")
+                else:
+                    messages.error(request, f"送信エラー: {response.json().get('message')}")
+
+            except requests.exceptions.RequestException:
+                messages.error(request, "サーバーに接続できず、メッセージを送信できませんでした。")
+                #  未送信メッセージとしてローカルDBに保存するロジック
+        else:
+            messages.warning(request, "宛先グループとメッセージの両方を入力してください。")
+
+        # return redirect('field_app:field_chat')  # POST後は同じページにリダイレクト
+        # redirect先を、選択していたグループIDを維持するように変更
+        return redirect(f"{reverse('field_app:field_chat')}?group_id={group_id}")
+
+    groups = []
+    try:
+        # 中央サーバーに参加グループを問い合わせる
+        headers = {'X-User-Login-Id': request.user.username}  # usernameにlogin_idが入っている前提
+        api_url = config.CENTRAL_SERVER_URL + config.API_BASE_PATH + 'get-user-groups/'
+        response = requests.get(api_url, headers=headers, timeout=5)
+
+        if response.status_code == 200:
+            groups = response.json().get('groups', [])
+        else:
+            messages.error(request, f"グループ情報の取得に失敗しました: {response.json().get('message')}")
+
+    except requests.exceptions.RequestException:
+        messages.error(request, "中央サーバーに接続できず、グループ情報を取得できませんでした。")
+
+    context = {
+        'groups': groups,
+    }
+
+    messages_history = []
+    if selected_group_id != 'all':
+        try:
+            headers = {'X-User-Login-Id': request.user.username}
+            api_url = f"{config.CENTRAL_SERVER_URL}{config.API_BASE_PATH}groups/{selected_group_id}/messages/"
+
+            response = requests.get(api_url, headers=headers, timeout=5)
+
+            if response.status_code == 200:
+                messages_history = response.json().get('messages', [])
+            else:
+                messages.error(request, f"メッセージ履歴の取得に失敗: {response.json().get('message')}")
+
+        except requests.exceptions.RequestException:
+            messages.error(request, "サーバーに接続できず、メッセージ履歴を取得できませんでした。")
+
+    context = {
+        'groups': groups,
+        'selected_group_id': selected_group_id,
+        'messages_history': messages_history,
+    }
+    return render(request, 'field_app/field_chat.html', context)
