@@ -18,7 +18,7 @@ def home_view(request):
     return render(request, 'field_app/home.html')
 
 
-# --- 避難所受付ビュー (ガワだけ) ---
+# --- 避難所受付ビュー ---
 @login_required
 def shelter_checkin_view(request):
     """
