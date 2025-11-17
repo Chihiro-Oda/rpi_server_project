@@ -15,26 +15,47 @@
         <span class="text-sm font-normal">(QR: 入退所・人数確認)</span>
     </a>
 
-    <!-- 炊き出し確認ページへのリンク (URLは未実装なので # に) -->
+    <!-- 炊き出し確認ページへのリンク -->
     <a href="{% url 'field_app:food_distribution' %}" class="action-button bg-yellow-500 text-white hover:bg-yellow-600">
         炊き出し確認
         <br>
         <span class="text-sm font-normal">(QR: 2重受け取り防止)</span>
     </a>
 
-    <!-- 安否・状況報告ページへのリンク (URLは未実装なので # に) -->
+    <!-- 安否・状況報告ページへのリンク -->
     <a href="{% url 'field_app:field_report' %}" class="action-button bg-green-500 text-white hover:bg-green-600">
         安否・状況報告
         <br>
         <span class="text-sm font-normal">(現場状況の構造化入力)</span>
     </a>
     
-    <!-- 現場チャットページへのリンク (URLは未実装なので # に) -->
+    <!-- 現場チャットページへのリンク -->
     <a href="{% url 'field_app:field_chat' %}" class="action-button bg-gray-500 text-white hover:bg-gray-600">
         現場チャット
         <br>
         <span class="text-sm font-normal">(構造化レポート送信)</span>
     </a>
+
+    {# ★★★ 手動同期機能を追加 ★★★ #}
+    <div class="mt-8 bg-gray-700 p-4 rounded-lg">
+        <h3 class="text-lg font-semibold mb-2 text-yellow-300">データ同期</h3>
+
+        {# 同期ステータスを表示するエリア #}
+        <div class="text-sm text-gray-300 mb-4">
+            <p>未同期のチェックイン記録: <span class="font-bold text-white">{{ unsynced_checkin_count }}</span> 件</p>
+            <p>未同期の現場レポート: <span class="font-bold text-white">{{ unsynced_report_count }}</span> 件</p>
+            <p>最終同期時刻: {{ last_sync_time | default:"まだ同期されていません" }}</p>
+        </div>
+
+        {# 手動同期を実行するためのフォーム #}
+        <form method="post" action="{% url 'field_app:manual_sync' %}">
+            {% csrf_token %}
+            <button type="submit" class="w-full action-button bg-yellow-600 hover:bg-yellow-500 text-white">
+                <!--<svg >  アイコン </svg> -->
+                今すぐ手動で同期する
+            </button>
+        </form>
+    </div>
 
 </div>
 {% endblock %}

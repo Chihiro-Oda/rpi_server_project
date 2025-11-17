@@ -24,5 +24,7 @@ urlpatterns = [
 
     path('chat/', views.field_chat_view, name='field_chat'),
 
+    path('manual-sync/', views.manual_sync_view, name='manual_sync'),
+
 
 ]

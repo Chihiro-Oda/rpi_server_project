@@ -1,9 +1,14 @@
 # field_app/views.py
+import subprocess
+import sys
+
 import requests
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required  # ログイン必須にする
 from django.shortcuts import render, redirect
 from django.urls import reverse
+from django.views.decorators.http import require_POST
 
 import config
 from .forms import FieldReportForm
@@ -15,7 +20,42 @@ def home_view(request):
     """
     現場操作のホームメニュー画面を表示するビュー
     """
-    return render(request, 'field_app/home.html')
+    # 各モデルの未同期件数を取得
+    unsynced_checkin_count = UnsyncedCheckin.objects.filter(is_synced=False).count()
+    unsynced_report_count = UnsyncedFieldReport.objects.filter(is_synced=False).count()
+
+    context = {
+        'unsynced_checkin_count': unsynced_checkin_count,
+        'unsynced_report_count': unsynced_report_count,
+        # 'last_sync_time': ... (最終同期時刻をどこかに保存するなら、それを取得)
+    }
+    return render(request, 'field_app/home.html', context)
+
+@require_POST  # POSTリクエストのみを受け付ける
+@login_required
+def manual_sync_view(request):
+    """
+    手動でのデータ同期をトリガーするビュー。
+    バックグラウンドで `sync_data` 管理コマンドを実行する。
+    """
+    try:
+        # 実行するコマンドを準備
+        # sys.executable は現在実行中のPythonインタプリタのパス (/path/to/.venv/bin/python)
+        # manage.py のフルパスを指定
+        manage_py_path = settings.BASE_DIR / "manage.py"
+        command = [sys.executable, str(manage_py_path), "sync_data"]
+
+        # Popenを使って非同期でコマンドを実行
+        # これにより、同期処理の完了を待たずに、すぐにレスポンスを返すことができる
+        subprocess.Popen(command)
+
+        messages.success(request, "データ同期処理を開始しました。完了まで数分かかる場合があります。")
+
+    except Exception as e:
+        messages.error(request, f"同期処理の開始に失敗しました: {e}")
+
+    # 処理の成否に関わらず、ホーム画面にリダイレクトする
+    return redirect('field_app:home')
 
 
 # --- 避難所受付ビュー ---
