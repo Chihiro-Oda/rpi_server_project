@@ -97,6 +97,7 @@ def shelter_checkin_view(request):
     recent_checkins = UnsyncedCheckin.objects.all()[:5]
     context = {
         'recent_checkins': recent_checkins,
+        'debug': settings.DEBUG,
     }
     return render(request, 'field_app/shelter_checkin.html', context)
 

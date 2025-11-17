@@ -23,7 +23,7 @@ class UnsyncedCheckin(models.Model):
 
     # 2. どの避難所で (Where)
     # このラズパイが設置されている避難所のID (config.pyなどで管理)
-    shelter_id = models.IntegerField(
+    shelter_id = models.CharField(
         verbose_name="避難所ID"
     )
 
@@ -85,7 +85,7 @@ class UnsyncedFieldReport(models.Model):
     )
 
     # 1. どの避難所から (Where)
-    shelter_id = models.IntegerField(verbose_name="避難所ID")
+    shelter_id = models.CharField(verbose_name="避難所ID")
 
     # 2. 報告内容 (What)
     current_evacuees = models.PositiveIntegerField(verbose_name="現在避難者数")
