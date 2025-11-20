@@ -131,4 +131,6 @@ LOGIN_REDIRECT_URL = 'field_app:home' # ログイン成功後にリダイレク�
 
 LOGOUT_REDIRECT_URL = 'field_app:login' # ログアウト後にリダイレクトされるURL
 
+AUTH_USER_MODEL = 'field_app.User'
+
 

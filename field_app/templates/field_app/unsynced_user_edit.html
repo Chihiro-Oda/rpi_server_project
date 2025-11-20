@@ -1,0 +1,50 @@
+{% extends 'field_app/base.html' %}
+
+{% block title %}ユーザー情報修正{% endblock %}
+{% block header_title %}ユーザー情報修正{% endblock %}
+
+{% block content %}
+<div class="p-4 max-w-lg mx-auto">
+    <div class="bg-gray-700 p-6 rounded-lg shadow-xl">
+        <h3 class="text-lg font-semibold mb-4 text-white">登録情報の修正</h3>
+        
+        <div class="mb-4 p-3 bg-red-900/50 border border-red-500 rounded text-red-200 text-sm">
+            <strong>発生したエラー:</strong><br>
+            {{ user_reg.sync_error }}
+        </div>
+
+        <form method="post" class="space-y-4">
+            {% csrf_token %}
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">{{ form.username.label }}</label>
+                {{ form.username }} <!-- CSSクラスはwidgetかここに追加 -->
+                {% if form.username.errors %}<div class="text-red-400 text-sm">{{ form.username.errors }}</div>{% endif %}
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">{{ form.full_name.label }}</label>
+                {{ form.full_name }}
+                {% if form.full_name.errors %}<div class="text-red-400 text-sm">{{ form.full_name.errors }}</div>{% endif %}
+            </div>
+
+            <div class="flex justify-between pt-4">
+                <a href="{% url 'field_app:unsynced_users_list' %}" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded">キャンセル</a>
+                <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded font-bold">修正を保存</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+    /* 簡易的なフォームスタイル */
+    input[type="text"] {
+        width: 100%;
+        background-color: #1f2937; /* gray-800 */
+        color: white;
+        border: 1px solid #4b5563; /* gray-600 */
+        padding: 0.5rem;
+        border-radius: 0.25rem;
+    }
+</style>
+{% endblock %}

@@ -1,4 +1,5 @@
 # field_app/models.py
+from django.contrib.auth.models import AbstractUser, Group, Permission
 from django.db import models
 from django.conf import settings  # (もしUserモデルと連携する場合)
 
@@ -15,8 +16,8 @@ class UnsyncedCheckin(models.Model):
     )
 
     # 1. 誰が (Who)
-    # ユーザーのプライマリーキー(id)ではなく、QRコードから読み取ったlogin_idをそのまま保存
-    login_id = models.CharField(
+    # ユーザーのプライマリーキー(id)ではなく、QRコードから読み取ったusernameをそのまま保存
+    username = models.CharField(
         verbose_name="避難者のログインID",
         max_length=150
     )
@@ -66,7 +67,7 @@ class UnsyncedCheckin(models.Model):
     def __str__(self):
         # 管理画面などで見やすいように表示形式を定義
         sync_status = "同期済" if self.is_synced else "未同期"
-        return f"[{sync_status}] {self.timestamp.strftime('%Y-%m-%d %H:%M')} - {self.login_id} ({self.get_checkin_type_display()})"
+        return f"[{sync_status}] {self.timestamp.strftime('%Y-%m-%d %H:%M')} - {self.username} ({self.get_checkin_type_display()})"
 
     class Meta:
         verbose_name = "未同期チェックイン記録"
@@ -108,3 +109,66 @@ class UnsyncedFieldReport(models.Model):
         verbose_name = "未同期 現場状況報告"
         verbose_name_plural = "未同期 現場状況報告"
         ordering = ['-timestamp']
+
+
+class UnsyncedUserRegistration(models.Model):
+    """中央サーバーに同期されていない、新規ユーザーの仮登録情報"""
+    full_name = models.CharField(verbose_name="氏名", max_length=150)
+    username = models.CharField(verbose_name="希望ログインID", max_length=150, unique=True)
+    password = models.CharField(verbose_name="パスワード (ハッシュ化済)", max_length=128)
+
+    # 同期状態を管理するフィールド
+    is_synced = models.BooleanField(verbose_name="同期済み", default=False)
+    sync_error = models.TextField(verbose_name="同期エラー", blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.full_name} ({self.username}) - {'同期済' if self.is_synced else '未同期'}"
+
+
+# 中央サーバーと同じ定義をコピー
+class User(AbstractUser):
+    # --- カスタムフィールド ---
+    ROLE_CHOICES = (
+        ('general', '一般ユーザー'),
+        ('admin', 'システム管理者'),
+        ('rescuer', '救助チーム')
+    )
+    STATUS_CHOICES = (
+        ('safe', '無事'),
+        ('help', '要支援'),
+        ('unknown', '未確認'),
+    )
+
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='general')
+    # safety_status など、ラズパイ側で使わないフィールドは省略しても良いですが、
+    # コピーして同じにしておく方が混乱がありません。
+    safety_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='unknown')
+
+    # AbstractUserを継承しているので、username, password, emailなどは自動で入ります
+    # 中央サーバーで設定した通り、emailのユニーク制約解除やfull_nameの追加を行います
+    email = models.EmailField(verbose_name='メールアドレス', blank=True, unique=False)
+    full_name = models.CharField(verbose_name='氏名', max_length=150, blank=True)
+
+    # USERNAME_FIELDなどの設定も合わせる
+    USERNAME_FIELD = 'username'
+    REQUIRED_FIELDS = []
+
+    # related_name の衝突回避（ラズパイ側でも必要）
+    groups = models.ManyToManyField(
+        Group,
+        verbose_name=('groups'),
+        blank=True,
+        related_name="field_user_set",  # 名前を変えておく
+        related_query_name="user",
+    )
+    user_permissions = models.ManyToManyField(
+        Permission,
+        verbose_name=('user permissions'),
+        blank=True,
+        related_name="field_user_permissions_set",  # 名前を変えておく
+        related_query_name="user",
+    )
+
+    def __str__(self):
+        return self.full_name or self.username

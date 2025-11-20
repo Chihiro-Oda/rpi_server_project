@@ -1,0 +1,58 @@
+{% extends 'field_app/base.html' %}
+
+{% block title %}仮登録ユーザー管理{% endblock %}
+{% block header_title %}仮登録ユーザー管理 (未同期){% endblock %}
+
+{% block content %}
+<div class="p-4">
+    <div class="bg-gray-700 p-6 rounded-lg shadow-xl">
+        <h3 class="text-lg font-semibold mb-4 text-white">同期待ち・エラーユーザー一覧</h3>
+        
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-gray-300">
+                <thead class="bg-gray-800 text-gray-400">
+                    <tr>
+                        <th class="p-3">氏名</th>
+                        <th class="p-3">ログインID</th>
+                        <th class="p-3">状態 / エラー内容</th>
+                        <th class="p-3 text-center">操作</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-600">
+                    {% for user in users %}
+                    <tr class="hover:bg-gray-600">
+                        <td class="p-3">{{ user.full_name }}</td>
+                        <td class="p-3 font-mono">{{ user.username }}</td>
+                        <td class="p-3">
+                            {% if user.sync_error %}
+                                <span class="text-red-400 font-bold">エラー:</span><br>
+                                <span class="text-sm">{{ user.sync_error }}</span>
+                            {% else %}
+                                <span class="text-yellow-400">同期待ち</span>
+                            {% endif %}
+                        </td>
+                        <td class="p-3 text-center">
+                            {% if user.sync_error %}
+                                <a href="{% url 'field_app:unsynced_user_edit' user.id %}" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-sm">
+                                    修正して再送
+                                </a>
+                            {% else %}
+                                <span class="text-gray-500 text-sm">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="p-4 text-center">未同期のユーザーはいません。</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="mt-6">
+            <a href="{% url 'field_app:home' %}" class="text-gray-400 hover:text-white underline">ホームに戻る</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

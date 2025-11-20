@@ -2,8 +2,11 @@
 
 import requests
 from django.core.management.base import BaseCommand
+from django.db.models import Q
+
 import config  # ラズパイ側のプロジェクトルートにある config.py
-from field_app.models import UnsyncedCheckin, UnsyncedFieldReport
+from field_app.models import UnsyncedCheckin, UnsyncedFieldReport, UnsyncedUserRegistration
+
 
 class Command(BaseCommand):
     help = '未同期のデータを中央サーバーに一括で送信します。'
@@ -21,6 +24,8 @@ class Command(BaseCommand):
 
         # 2. 未同期の「現場状況報告」を同期
         self.sync_field_reports()
+
+        self.sync_user_registrations()
 
         self.stdout.write(self.style.SUCCESS('===== 全ての同期処理が完了しました ====='))
 
@@ -46,10 +51,10 @@ class Command(BaseCommand):
 
         for record in unsynced_records:
             payload = {
-                "login_id": record.login_id,
-                "shelter_management_id": config.SHELTER_ID, # configから管理IDを取得
+                "username": record.username,
+                "shelter_management_id": config.SHELTER_ID,  # configから管理IDを取得
                 "checkin_type": record.checkin_type,
-                "timestamp": record.timestamp.isoformat(), # ISO 8601形式の文字列に変換
+                "timestamp": record.timestamp.isoformat(),  # ISO 8601形式の文字列に変換
                 "device_id": config.DEVICE_ID
             }
             try:
@@ -59,20 +64,20 @@ class Command(BaseCommand):
                     record.last_sync_error = None
                     record.save()
                     self.stdout.write(self.style.SUCCESS(f'  -> ID {record.id}: 同期成功'))
-                else: # APIがエラーを返した場合
+                else:  # APIがエラーを返した場合
                     error_msg = response.json().get('message', '不明なサーバーエラー')
                     record.last_sync_error = f"HTTP {response.status_code}: {error_msg}"
                     record.sync_attempts += 1
                     record.save()
                     self.stdout.write(self.style.ERROR(f'  -> ID {record.id}: 同期失敗 - {error_msg}'))
 
-            except requests.exceptions.RequestException as e: # ネットワーク接続エラー
+            except requests.exceptions.RequestException as e:  # ネットワーク接続エラー
                 record.last_sync_error = f"ネットワークエラー: {e}"
                 record.sync_attempts += 1
                 record.save()
                 self.stdout.write(self.style.ERROR(f'  -> ID {record.id}: ネットワーク接続エラー'))
                 self.stderr.write('中央サーバーへの接続が失われました。このタスクを中断します。')
-                break # ネットワークが切れたら、このループは中断
+                break  # ネットワークが切れたら、このループは中断
 
     def sync_field_reports(self):
         """未同期の現場状況報告を同期する"""
@@ -108,3 +113,62 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.ERROR(f'  -> ID {record.id}: ネットワーク接続エラー'))
                 self.stderr.write('中央サーバーへの接続が失われました。このタスクを中断します。')
                 break
+
+    def sync_user_registrations(self):
+
+        self.stdout.write("\n--- [3/3] 新規ユーザー仮登録の同期を開始 ---")
+        unsynced_users = UnsyncedUserRegistration.objects.filter(
+            Q(sync_error__isnull=True) | Q(sync_error=''),
+            is_synced=False
+        )
+
+        if not unsynced_users:
+            self.stdout.write(self.style.SUCCESS('同期対象の仮登録ユーザーはいませんでした。'))
+            return
+
+        api_url = config.CENTRAL_SERVER_URL + config.API_BASE_PATH + 'register-field-user/'
+
+        for user_reg in unsynced_users:
+            payload = {
+                "full_name": user_reg.full_name,
+                "username": user_reg.username,
+                "password": user_reg.password,  # ハッシュ済みのパスワードを送る
+            }
+            try:
+                response = requests.post(api_url, json=payload, timeout=10)
+
+                # ★ 変更点: JSONデコードを try の中ではなく、ステータスコード確認後に行う
+                if response.status_code == 201:  # 成功
+                    user_reg.is_synced = True
+                    user_reg.sync_error = None  # エラーをクリア
+                    user_reg.save()
+                    self.stdout.write(self.style.SUCCESS(f'  -> ユーザー {user_reg.username}: 本登録成功'))
+
+                else:  # API側でロジックエラー (400, 409, 500など)
+                    # JSONとして解析できるか試す
+                    try:
+                        error_json = response.json()
+                        error_msg = error_json.get('message', '不明なエラー')
+                    except ValueError:
+                        # JSONじゃなかった場合（500エラーでHTMLが返ってきた時など）
+                        error_msg = f"サーバーエラー (Raw): {response.text[:100]}..."  # 最初の100文字だけ表示
+
+                    # データベースにエラーを保存
+                    user_reg.sync_error = f"HTTP {response.status_code}: {error_msg}"
+                    user_reg.save()
+
+                    # ★ ターミナルに見やすく出力
+                    self.stdout.write(
+                        self.style.ERROR(f'  -> ユーザー {user_reg.username}: 失敗 (HTTP {response.status_code})'))
+                    self.stdout.write(self.style.WARNING(f'     理由: {error_msg}'))
+
+            except requests.exceptions.RequestException as e:
+                # 通信自体の失敗（タイムアウト、DNSエラーなど）
+                user_reg.sync_error = f"ネットワーク接続エラー: {str(e)}"
+                user_reg.save()
+
+                self.stdout.write(self.style.ERROR(f'  -> ユーザー {user_reg.username}: ネットワーク接続エラー'))
+                self.stderr.write(f'詳細: {str(e)}')
+                self.stderr.write('中央サーバーへの接続が失われました。このタスクを中断します。')
+                break
+

@@ -11,8 +11,8 @@
         <div class="bg-gray-700 p-6 rounded-lg shadow-xl">
             <form id="checkin-form" method="post" class="space-y-4">
                 {% csrf_token %}
-                <!-- JavaScriptが読み取ったlogin_idをセットする隠しフィールド -->
-                <input type="hidden" name="login_id" id="login_id_input">
+                <!-- JavaScriptが読み取ったusernameをセットする隠しフィールド -->
+                <input type="hidden" name="username" id="username_input">
                 <!-- 選択された種別をセットする隠しフィールド -->
                 <input type="hidden" name="checkin_type" id="checkin_type_input">
 
@@ -51,7 +51,7 @@
                     <p class="text-sm text-gray-400 mb-2">カメラが使えない開発環境用のテストフォームです。</p>
                     <form method="post" class="flex items-center gap-4">
                         {% csrf_token %}
-                        <input type="text" name="login_id" placeholder="テスト用のlogin_idを入力"
+                        <input type="text" name="username" placeholder="テスト用のusernameを入力"
                                class="flex-grow bg-gray-900 text-white p-2 rounded border border-gray-600 focus:ring-yellow-500 focus:border-yellow-500">
                         <button type="submit" name="checkin_type" value="checkin"
                                 class="px-4 py-2 bg-green-700 text-white rounded font-semibold hover:bg-green-600">入所
@@ -71,7 +71,7 @@
                 {% for record in recent_checkins %}
                     <li class="p-2 rounded {% if record.checkin_type == 'checkin' %} bg-green-900/50 {% else %} bg-red-900/50 {% endif %}">
                         <span class="font-mono text-sm">{{ record.timestamp|date:"H:i:s" }}</span> -
-                        <strong>ID: {{ record.login_id }}</strong>
+                        <strong>ID: {{ record.username }}</strong>
                         ({{ record.get_checkin_type_display }})
                         {% if record.is_synced %}<span class="text-xs text-green-400 ml-2">(同期済)</span>{% endif %}
                     </li>
@@ -92,7 +92,7 @@
             const video = document.getElementById('video');
             const statusMessage = document.getElementById('status-message');
             const form = document.getElementById('checkin-form');
-            const loginIdInput = document.getElementById('login_id_input');
+            const loginIdInput = document.getElementById('username_input');
             const checkinTypeInput = document.getElementById('checkin_type_input');
             const btnCheckin = document.getElementById('btn-checkin');
             const btnCheckout = document.getElementById('btn-checkout');

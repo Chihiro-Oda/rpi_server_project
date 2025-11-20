@@ -77,7 +77,7 @@ class Command(BaseCommand):
 
         for checkin in unsynced_checkins:
             payload = {
-                "login_id": checkin.login_id,
+                "username": checkin.username,
                 "shelter_management_id": checkin.shelter_id,
                 "checkin_type": checkin.checkin_type,
                 "timestamp": checkin.timestamp.isoformat(),

@@ -5,14 +5,14 @@ import sys
 import requests
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required  # ログイン必須にする
-from django.shortcuts import render, redirect
+from django.contrib.auth.decorators import login_required, user_passes_test  # ログイン必須にする
+from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 import config
-from .forms import FieldReportForm
-from .models import UnsyncedCheckin, UnsyncedFieldReport
+from .forms import FieldReportForm, UnsyncedUserEditForm, FieldSignUpForm
+from .models import UnsyncedCheckin, UnsyncedFieldReport, UnsyncedUserRegistration
 
 
 @login_required  # ログインしていないとアクセスできないようにする
@@ -30,6 +30,7 @@ def home_view(request):
         # 'last_sync_time': ... (最終同期時刻をどこかに保存するなら、それを取得)
     }
     return render(request, 'field_app/home.html', context)
+
 
 @require_POST  # POSTリクエストのみを受け付ける
 @login_required
@@ -66,11 +67,11 @@ def shelter_checkin_view(request):
     """
     # POSTリクエスト（JavaScriptからフォームが送信された）の場合
     if request.method == 'POST':
-        login_id = request.POST.get('login_id')
+        username = request.POST.get('username')
         checkin_type = request.POST.get('checkin_type')
 
         # 簡単なバリデーション
-        if not login_id or not checkin_type:
+        if not username or not checkin_type:
             messages.error(request, 'QRコードの読み取り、または種別の選択に失敗しました。')
             return redirect('field_app:shelter_checkin')
 
@@ -81,12 +82,12 @@ def shelter_checkin_view(request):
         # ローカルDBに一時保存
         try:
             UnsyncedCheckin.objects.create(
-                login_id=login_id,
+                username=username,
                 shelter_id=config.SHELTER_ID,
                 checkin_type=checkin_type,
             )
             type_display = "入所" if checkin_type == 'checkin' else "退所"
-            messages.success(request, f'ID: {login_id} さんの「{type_display}」を記録しました。')
+            messages.success(request, f'ID: {username} さんの「{type_display}」を記録しました。')
         except Exception as e:
             messages.error(request, f'データベースへの記録中にエラーが発生しました: {e}')
 
@@ -127,13 +128,13 @@ def food_distribution_view(request):
 
     # フォームが送信された場合
     if request.method == 'POST':
-        login_id = request.POST.get('login_id')
+        username = request.POST.get('username')
         item_id = request.POST.get('item_id')
 
         # 中央サーバーのAPIに問い合わせ
         try:
             payload = {
-                'login_id': login_id,
+                'username': username,
                 'item_id': item_id,
                 'device_id': config.DEVICE_ID,
                 'action': 'record'  # 判定と記録を同時に行う
@@ -143,7 +144,7 @@ def food_distribution_view(request):
 
             api_result = response.json()
             context['api_result'] = api_result  # 結果をテンプレートに渡す
-            context['last_query'] = {'login_id': login_id, 'item_id': item_id}
+            context['last_query'] = {'username': username, 'item_id': item_id}
 
             if response.status_code == 200:
                 messages.success(request, api_result.get('message', '判定が完了しました。'))
@@ -225,7 +226,7 @@ def field_chat_view(request):
     groups = []
     try:
         # 中央サーバーに参加グループを問い合わせる
-        headers = {'X-User-Login-Id': request.user.username}  # usernameにlogin_idが入っている前提
+        headers = {'X-User-Login-Id': request.user.username}  # usernameにusernameが入っている前提
         api_url = config.CENTRAL_SERVER_URL + config.API_BASE_PATH + 'get-user-groups/'
         response = requests.get(api_url, headers=headers, timeout=5)
 
@@ -263,3 +264,67 @@ def field_chat_view(request):
         'messages_history': messages_history,
     }
     return render(request, 'field_app/field_chat.html', context)
+
+
+def field_signup_view(request):
+    if request.method == 'POST':
+        form = FieldSignUpForm(request.POST)
+        if form.is_valid():
+            # DBに保存（UnsyncedUserRegistrationモデル）
+            # フォームで定義した password フィールドの値は自動でモデルの password フィールドに入る
+            form.save()
+
+            messages.success(request, '仮登録を受け付けました。管理者の承認（データ同期）をお待ちください。')
+            return redirect('field_app:login')  # ログイン画面に戻る
+    else:
+        form = FieldSignUpForm()
+
+    return render(request, 'field_app/field_signup.html', {'form': form})
+
+
+def is_field_staff(user):
+    # Userモデルにroleがある前提。ない場合は user.is_staff などで代用
+    return user.is_authenticated and getattr(user, 'role', 'general') in ['admin', 'rescuer']
+
+
+# --- 未同期ユーザー一覧 ---
+@login_required
+@user_passes_test(is_field_staff)
+def unsynced_users_list_view(request):
+    # 未同期のユーザーを全て取得
+    users = UnsyncedUserRegistration.objects.filter(is_synced=False).order_by('-created_at')
+
+    context = {
+        'users': users,
+    }
+    return render(request, 'field_app/unsynced_users_list.html', context)
+
+
+# --- 未同期ユーザー修正 ---
+@login_required
+@user_passes_test(is_field_staff)
+def unsynced_user_edit_view(request, pk):
+    user_reg = get_object_or_404(UnsyncedUserRegistration, pk=pk)
+
+    if request.method == 'POST':
+        form = UnsyncedUserEditForm(request.POST, instance=user_reg)
+        if form.is_valid():
+            saved_user = form.save(commit=False)
+            saved_user.sync_error = None
+            saved_user.save()
+
+            messages.success(request, f'{saved_user.username} さんの情報を修正しました。次回の同期で再送信されます。')
+            return redirect('field_app:unsynced_users_list')
+
+    else:  # GETリクエストの場合
+        form = UnsyncedUserEditForm(instance=user_reg)
+
+    # ★★★★★ ここが重要！ ★★★★★
+    # この return 文は、if/else のブロックの「外側」にある必要があります。
+    # インデントを def unsynced_user_edit_view と同じレベルより一段下げた位置にしてください。
+
+    context = {
+        'form': form,
+        'user_reg': user_reg,
+    }
+    return render(request, 'field_app/unsynced_user_edit.html', context)

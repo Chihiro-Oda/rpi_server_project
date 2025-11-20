@@ -9,7 +9,7 @@
         <div class="bg-gray-700 p-6 rounded-lg shadow-xl">
             <form id="distribution-form" method="post" class="space-y-4">
                 {% csrf_token %}
-                <input type="hidden" name="login_id" id="login_id_input">
+                <input type="hidden" name="username" id="username_input">
 
                 <!-- 1. 配布物資の選択 -->
                 <div>
@@ -35,9 +35,9 @@
                     <!-- 後で消します -->
                     <div class="mt-4 p-4 border rounded-lg bg-gray-800">
                         <p class="text-sm text-yellow-300 mb-2">【開発用デバッグパネル】</p>
-                        <label for="manual_login_id" class="text-sm">Login IDを手動入力:</label>
+                        <label for="manual_username" class="text-sm">Login IDを手動入力:</label>
                         <div class="flex">
-                            <input type="text" id="manual_login_id"
+                            <input type="text" id="manual_username"
                                    class="p-2 rounded-l-md bg-gray-600 text-white flex-1">
                             <button type="button" id="manual_submit_btn"
                                     class="p-2 rounded-r-md bg-yellow-500 text-black font-semibold">手動で判定
@@ -52,7 +52,7 @@
         {% if api_result %}
             <div class="p-4 text-center rounded-lg {% if api_result.can_distribute %}bg-green-800 border-green-600{% else %}bg-red-800 border-red-600{% endif %} border-2">
                 <p class="text-2xl font-bold text-white">【判定結果】{{ api_result.message }}</p>
-                <p class="text-sm text-gray-300">問い合わせID: {{ last_query.login_id }}</p>
+                <p class="text-sm text-gray-300">問い合わせID: {{ last_query.username }}</p>
             </div>
         {% endif %}
     </div>
@@ -66,8 +66,8 @@
         document.addEventListener('DOMContentLoaded', function () {
             const video = document.getElementById('video');
             const form = document.getElementById('distribution-form');
-            const loginIdInput = document.getElementById('login_id_input');
-            // const manualInput = document.getElementById('manual_login_id');
+            const loginIdInput = document.getElementById('username_input');
+            // const manualInput = document.getElementById('manual_username');
             // const manualBtn = document.getElementById('manual_submit_btn');
 
             /* manualBtn.addEventListener('click', function () {
