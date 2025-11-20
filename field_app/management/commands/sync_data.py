@@ -40,7 +40,7 @@ class Command(BaseCommand):
 
     def sync_checkins(self):
         """未同期のチェックイン記録を同期する"""
-        self.stdout.write("\n--- [1/2] 避難所チェックイン記録の同期を開始 ---")
+        self.stdout.write("\n--- [2/3] 避難所チェックイン記録の同期を開始 ---")
         unsynced_records = UnsyncedCheckin.objects.filter(is_synced=False)
 
         if not unsynced_records:
@@ -82,7 +82,7 @@ class Command(BaseCommand):
 
     def sync_field_reports(self):
         """未同期の現場状況報告を同期する"""
-        self.stdout.write("\n--- [2/2] 現場状況報告の同期を開始 ---")
+        self.stdout.write("\n--- [3/3] 現場状況報告の同期を開始 ---")
         unsynced_records = UnsyncedFieldReport.objects.filter(is_synced=False)
 
         if not unsynced_records:
@@ -117,7 +117,7 @@ class Command(BaseCommand):
 
     def sync_user_registrations(self):
 
-        self.stdout.write("\n--- [3/3] 新規ユーザー仮登録の同期を開始 ---")
+        self.stdout.write("\n--- [1/3] 新規ユーザー仮登録の同期を開始 ---")
         unsynced_users = UnsyncedUserRegistration.objects.filter(
             Q(sync_error__isnull=True) | Q(sync_error=''),
             is_synced=False
