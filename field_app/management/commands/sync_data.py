@@ -5,7 +5,7 @@ from django.core.management.base import BaseCommand
 from django.db.models import Q
 
 import config  # ラズパイ側のプロジェクトルートにある config.py
-from field_app.models import UnsyncedCheckin, UnsyncedFieldReport, UnsyncedUserRegistration
+from field_app.models import UnsyncedCheckin, UnsyncedFieldReport, UnsyncedUserRegistration, User
 
 
 class Command(BaseCommand):
@@ -142,6 +142,16 @@ class Command(BaseCommand):
                     user_reg.is_synced = True
                     user_reg.sync_error = None  # エラーをクリア
                     user_reg.save()
+
+                    if not User.objects.filter(username=user_reg.username).exists():
+                        User.objects.create_user(
+                            username=user_reg.username,
+                            password=user_reg.password,  # 生のパスワードを渡すとハッシュ化して保存される
+                            full_name=user_reg.full_name,
+                            role='general'  # デフォルトは一般ユーザーとして作成
+                        )
+                        self.stdout.write(self.style.SUCCESS(f'     (ラズパイ内にもユーザーを作成しました)'))
+
                     self.stdout.write(self.style.SUCCESS(f'  -> ユーザー {user_reg.username}: 本登録成功'))
 
                 else:  # API側でロジックエラー (400, 409, 500など)
