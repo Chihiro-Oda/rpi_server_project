@@ -79,6 +79,19 @@ def shelter_checkin_view(request):
             messages.error(request, '無効な種別が指定されました。')
             return redirect('field_app:shelter_checkin')
 
+        # 連続入退所のチェック
+        # このユーザーの「最新の記録」を1件取得する
+        last_record = UnsyncedCheckin.objects.filter(username=username).order_by('-timestamp').first()
+
+        if last_record and last_record.checkin_type == checkin_type:
+            # 直前の記録と同じ種別だった場合、保存せずに警告を出す
+            action_name = "入所" if checkin_type == 'checkin' else "退所"
+            messages.warning(request,
+                                f'ID: {username} さんは既に「{action_name}」済みです。連続して同じ操作はできません。')
+
+            # エラーではないので、リダイレクトして終了
+            return redirect('field_app:shelter_checkin')
+
         # ローカルDBに一時保存
         try:
             UnsyncedCheckin.objects.create(

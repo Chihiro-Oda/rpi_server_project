@@ -122,6 +122,13 @@
             });
 
             // --- カメラとQRスキャンの処理 ---
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                statusMessage.textContent = "エラー: カメラAPIが使用できません。HTTPSまたはlocalhostでアクセスしてください。";
+                statusMessage.classList.add("text-red-500"); // 赤文字にするなど
+                console.error("navigator.mediaDevices is undefined. Secure Context required.");
+                return; // 処理を中断
+            }
+
             navigator.mediaDevices.getUserMedia({video: {facingMode: "environment"}})
                 .then(function (stream) {
                     video.srcObject = stream;
@@ -175,6 +182,7 @@
                 // フォームを自動送信
                 form.submit();
             }
+             btnCheckin.click();
         });
     </script>
 {% endblock %}

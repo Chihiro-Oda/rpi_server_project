@@ -19,13 +19,14 @@ class Command(BaseCommand):
             self.stderr.write(self.style.ERROR('ネットワークに接続できません。同期処理を中断します。'))
             return
 
-        # 1. 未同期の「避難所チェックイン記録」を同期
+        # 1. 未同期の「新規ユーザー仮登録」を同期
+        self.sync_user_registrations()
+
+        # 2. 未同期の「避難所チェックイン記録」を同期
         self.sync_checkins()
 
-        # 2. 未同期の「現場状況報告」を同期
+        # 3. 未同期の「現場状況報告」を同期
         self.sync_field_reports()
-
-        self.sync_user_registrations()
 
         self.stdout.write(self.style.SUCCESS('===== 全ての同期処理が完了しました ====='))
 
