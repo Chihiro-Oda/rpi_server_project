@@ -39,6 +39,8 @@
             </div>
 
             <!-- メッセージ入力 -->
+            {# 「全体連絡以外」 または 「管理者・救助チーム」 の場合のみフォームを表示 #}
+            {% if selected_group_id != 'all' or request.user.role in 'admin,rescuer' or request.user.is_superuser %}
             <div class="bg-gray-700 p-4 rounded-lg">
                 <div class="flex">
                     <input type="text" id="message-input" name="message" class="flex-1 p-3 border rounded-l-md bg-gray-600 text-white"
@@ -46,24 +48,120 @@
                     <button type="submit" class="bg-blue-500 text-white p-3 rounded-r-md">送信</button>
                 </div>
             </div>
+
+
+            {% else %}
+
+                {# ★★★ 権限がない場合の表示 ★★★ #}
+                <div class="bg-gray-700 p-4 rounded-lg text-center border border-gray-600">
+                    <p class="text-yellow-300 font-bold">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mb-1" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                        </svg>
+                        全体連絡は管理者のみ送信可能です
+                    </p>
+                </div>
+
+            {% endif %}
         </form>
     </div>
 {% endblock %}
 
 {% block body_extra %}
+    <!-- DjangoからJavaScriptへ変数を渡すためのjson_script -->
+    {{ central_server_url|json_script:"central-server-url" }}
+    {{ selected_group_id|json_script:"selected-group-id" }}
+    {{ request.user.username|json_script:"current-username" }}
+    {{ request.user.full_name|json_script:"current-fullname" }}
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             const groupSelect = document.getElementById('group-select');
+            const chatLog = document.getElementById('chat-log');
 
-            // ドロップダウンでグループを選択したら、ページをリロードしてそのグループのログを読み込む
+            // Djangoから渡された変数を取得
+            const centralServerUrlRaw = JSON.parse(document.getElementById('central-server-url').textContent);
+            const groupId = JSON.parse(document.getElementById('selected-group-id').textContent);
+            const currentUsername = JSON.parse(document.getElementById('current-username').textContent);
+            const currentFullname = JSON.parse(document.getElementById('current-fullname').textContent);
+
+            // --- 1. グループ選択時のリロード処理 ---
             groupSelect.addEventListener('change', function () {
                 const groupId = this.value;
                 window.location.href = `{% url 'field_app:field_chat' %}?group_id=${groupId}`;
             });
 
-            // チャットログを一番下にスクロール
-            const chatLog = document.getElementById('chat-log');
+            // --- 2. 初期スクロール ---
             chatLog.scrollTop = chatLog.scrollHeight;
+
+            // --- 3. WebSocket接続処理 (ここから追記) ---
+
+            // 中央サーバーのURLから "http://" などを取り除いて WebSocket用URL ("ws://") を作る
+            // 例: http://example.com:8000 -> ws://example.com:8000
+            let wsProtocol = 'ws://';
+            if (centralServerUrlRaw.startsWith('https')) {
+                wsProtocol = 'wss://';
+            }
+            const host = centralServerUrlRaw.replace(/^https?:\/\//, '');
+
+            // グループが選択されている場合のみ接続
+            if (groupId) {
+                const wsUrl = wsProtocol + host + '/ws/chat/group/' + groupId + '/';
+                console.log("Connecting to WebSocket:", wsUrl);
+
+                const chatSocket = new WebSocket(wsUrl);
+
+                chatSocket.onopen = function(e) {
+                    console.log("WebSocket Connected!");
+                };
+
+                chatSocket.onclose = function(e) {
+                    console.error("WebSocket connection closed unexpectedly.");
+                };
+
+                chatSocket.onmessage = function(e) {
+                    const data = JSON.parse(e.data);
+                    // メッセージを受信したら画面に追加
+                    appendMessage(data);
+                };
+            }
+
+            // --- 4. メッセージ追加関数 ---
+            function appendMessage(data) {
+                const message = data.message;
+                const sender = data.sender; // 送信者名 (username または full_name)
+
+                // 自分が送信者かどうか判定 (POST後のリロードで見えている場合は重複するが、リアルタイム受信の確認用)
+                // ※ 現在のビュー実装だとPOST後にリロードが入るため、自分のメッセージはリロードで表示されます。
+                //    WebSocketは「他人のメッセージ」をリアルタイム表示するために機能します。
+                const isMe = (sender === currentUsername || sender === currentFullname);
+
+                // HTML要素の作成
+                const msgDiv = document.createElement('div');
+                msgDiv.className = 'text-base' + (isMe ? ' text-right' : '');
+
+                const senderP = document.createElement('p');
+                senderP.className = 'font-bold text-sm text-gray-400 mb-1';
+                senderP.textContent = sender;
+
+                const contentP = document.createElement('p');
+                // スタイルクラスの適用（Djangoテンプレートと同じ条件分岐）
+                let bubbleClass = 'break-words p-3 rounded-lg inline-block max-w-xs text-left ';
+                if (isMe) {
+                    bubbleClass += 'bg-blue-600 text-white';
+                } else {
+                    bubbleClass += 'bg-gray-600 text-white';
+                }
+                contentP.className = bubbleClass;
+                contentP.textContent = message; // XSS対策のため textContent を使用
+
+                // 要素の組み立て
+                msgDiv.appendChild(senderP);
+                msgDiv.appendChild(contentP);
+
+                // チャットログに追加してスクロール
+                chatLog.appendChild(msgDiv);
+                chatLog.scrollTop = chatLog.scrollHeight;
+            }
         });
     </script>
 {% endblock %}

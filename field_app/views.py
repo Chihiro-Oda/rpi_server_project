@@ -202,63 +202,77 @@ def field_chat_view(request):
     """
     現場チャット画面の表示
     """
-    # 選択されているグループIDを取得 (GETパラメータから)
-    # 例: /chat/?group_id=3
+    # 選択されているグループIDを取得 (デフォルトは 'all')
     selected_group_id = request.GET.get('group_id', 'all')
 
+    # ---------------------------------------------------------
+    # 1. メッセージ送信処理 (POST)
+    # ---------------------------------------------------------
     if request.method == 'POST':
         group_id = request.POST.get('group_id')
+        if group_id == 'all':
+            if request.user.role not in ['admin', 'rescuer'] and not request.user.is_superuser:
+                messages.error(request, "全体連絡への送信権限がありません。")
+                return redirect(f"{reverse('field_app:field_chat')}?group_id={group_id}")
         message = request.POST.get('message')
 
-        if group_id == 'all':  # "本部 (全体連絡)" が選択された場合
-            #  全体連絡用のAPIを別途実装するか、特定のグループIDを割り当てる
-            messages.info(request, "（未実装）本部への全体連絡を送信しました。")
-        elif group_id and message:
+        # group_id が 'all' の場合も、通常のグループと同様にAPIへ送信する
+        if group_id and message:
             try:
                 headers = {'X-User-Login-Id': request.user.username}
+                # API側で group_id='all' を判定してブロードキャスト処理を行う
                 payload = {'group_id': group_id, 'message': message}
-                api_url = config.CENTRAL_SERVER_URL + config.API_BASE_PATH + 'post-group-message/'
 
+                api_url = config.CENTRAL_SERVER_URL + config.API_BASE_PATH + 'post-group-message/'
                 response = requests.post(api_url, headers=headers, json=payload, timeout=5)
 
                 if response.status_code == 200:
                     messages.success(request, "メッセージを送信しました。")
                 else:
-                    messages.error(request, f"送信エラー: {response.json().get('message')}")
+                    # エラーレスポンスの解析
+                    try:
+                        error_msg = response.json().get('message', '不明なエラー')
+                    except ValueError:
+                        error_msg = f"HTTP {response.status_code}"
+                    messages.error(request, f"送信エラー: {error_msg}")
 
             except requests.exceptions.RequestException:
                 messages.error(request, "サーバーに接続できず、メッセージを送信できませんでした。")
-                #  未送信メッセージとしてローカルDBに保存するロジック
+                # 未送信メッセージとしてローカルDBに保存するロジック (UnsyncedChatMessage等)
         else:
             messages.warning(request, "宛先グループとメッセージの両方を入力してください。")
 
-        # return redirect('field_app:field_chat')  # POST後は同じページにリダイレクト
-        # redirect先を、選択していたグループIDを維持するように変更
+        # 選択していたグループIDを維持してリダイレクト
         return redirect(f"{reverse('field_app:field_chat')}?group_id={group_id}")
 
+    # ---------------------------------------------------------
+    # 2. グループリストの取得
+    # ---------------------------------------------------------
     groups = []
     try:
-        # 中央サーバーに参加グループを問い合わせる
-        headers = {'X-User-Login-Id': request.user.username}  # usernameにusernameが入っている前提
+        headers = {'X-User-Login-Id': request.user.username}
         api_url = config.CENTRAL_SERVER_URL + config.API_BASE_PATH + 'get-user-groups/'
         response = requests.get(api_url, headers=headers, timeout=5)
 
         if response.status_code == 200:
             groups = response.json().get('groups', [])
         else:
-            messages.error(request, f"グループ情報の取得に失敗しました: {response.json().get('message')}")
+            messages.error(request, f"グループ情報の取得に失敗しました: {response.status_code}")
 
     except requests.exceptions.RequestException:
         messages.error(request, "中央サーバーに接続できず、グループ情報を取得できませんでした。")
 
-    context = {
-        'groups': groups,
-    }
-
+    # ---------------------------------------------------------
+    # 3. メッセージ履歴の取得
+    # ---------------------------------------------------------
     messages_history = []
-    if selected_group_id != 'all':
+
+    # selected_group_id が存在すれば ('all' を含む)、APIから履歴を取得する
+    if selected_group_id:
         try:
             headers = {'X-User-Login-Id': request.user.username}
+
+            # URL構築: groups/all/messages/ または groups/1/messages/
             api_url = f"{config.CENTRAL_SERVER_URL}{config.API_BASE_PATH}groups/{selected_group_id}/messages/"
 
             response = requests.get(api_url, headers=headers, timeout=5)
@@ -266,7 +280,12 @@ def field_chat_view(request):
             if response.status_code == 200:
                 messages_history = response.json().get('messages', [])
             else:
-                messages.error(request, f"メッセージ履歴の取得に失敗: {response.json().get('message')}")
+                # 403 Forbidden (権限なし) などの場合
+                try:
+                    error_msg = response.json().get('message', '取得失敗')
+                except ValueError:
+                    error_msg = f"HTTP {response.status_code}"
+                messages.error(request, f"履歴取得エラー: {error_msg}")
 
         except requests.exceptions.RequestException:
             messages.error(request, "サーバーに接続できず、メッセージ履歴を取得できませんでした。")
@@ -275,6 +294,9 @@ def field_chat_view(request):
         'groups': groups,
         'selected_group_id': selected_group_id,
         'messages_history': messages_history,
+        'central_server_url': config.CENTRAL_SERVER_URL,
+        'current_username': request.user.username,  # 自分の判定用
+        'current_fullname': request.user.full_name,  # 自分の判定用
     }
     return render(request, 'field_app/field_chat.html', context)
 
