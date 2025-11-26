@@ -5,7 +5,7 @@
 
 {% block content %}
     <div class="flex-1 flex flex-col p-4 space-y-4">
-        <form id="message-form" method="post" class="flex-1 flex flex-col space-y-4" autocomplete="off">
+        <form id="message-form" method="post" class="flex-1 flex flex-col space-y-4" autocomplete="off" enctype="multipart/form-data">
             {% csrf_token %}
 
             <div class="bg-gray-700 p-4 rounded-lg">
@@ -26,7 +26,11 @@
                     <div class="text-base {% if msg.sender == request.user.username or msg.sender == request.user.full_name %}text-right{% endif %}">
                         <p class="font-bold text-sm text-gray-400 mb-1">{{ msg.sender }}</p>
                         <p class="break-words p-3 rounded-lg inline-block max-w-xs text-left {% if msg.sender == request.user.username or msg.sender == request.user.full_name %}bg-blue-600 text-white{% else %}bg-gray-600 text-white{% endif %}">
-                            {{ msg.content }}
+                        {% if msg.image_url %}
+                            <img src="{{ central_server_url }}{{ msg.image_url }}" class="max-w-full h-auto rounded-lg mb-2">
+                            <br>
+                        {% endif %}
+                            {{ msg.content|urlize|linebreaksbr }}
                         </p>
                     </div>
                 {% empty %}
@@ -42,10 +46,13 @@
             {# 「全体連絡以外」 または 「管理者・救助チーム」 の場合のみフォームを表示 #}
             {% if selected_group_id != 'all' or request.user.role in 'admin,rescuer' or request.user.is_superuser %}
             <div class="bg-gray-700 p-4 rounded-lg">
-                <div class="flex">
-                    <input type="text" id="message-input" name="message" class="flex-1 p-3 border rounded-l-md bg-gray-600 text-white"
-                           placeholder="メッセージを入力..." required>
-                    <button type="submit" class="bg-blue-500 text-white p-3 rounded-r-md">送信</button>
+                <div class="flex flex-col gap-2">
+                    <input type="file" name="image" accept="image/*" class="text-white text-sm">
+                    <div class="flex">
+                        <input type="text" id="message-input" name="message" class="flex-1 p-3 border rounded-l-md bg-gray-600 text-white"
+                           placeholder="メッセージを入力...">
+                        <button type="submit" class="bg-blue-500 text-white p-3 rounded-r-md">送信</button>
+                    </div>
                 </div>
             </div>
 
@@ -129,6 +136,7 @@
             function appendMessage(data) {
                 const message = data.message;
                 const sender = data.sender; // 送信者名 (username または full_name)
+                const imageUrl = data.image_url; // 画像URL
 
                 // 自分が送信者かどうか判定 (POST後のリロードで見えている場合は重複するが、リアルタイム受信の確認用)
                 // ※ 現在のビュー実装だとPOST後にリロードが入るため、自分のメッセージはリロードで表示されます。
@@ -153,6 +161,31 @@
                 }
                 contentP.className = bubbleClass;
                 contentP.textContent = message; // XSS対策のため textContent を使用
+
+                if (imageUrl) {
+                    // 中央サーバーのURLを補完する必要があるかも（パスだけの場合）
+                    // data.image_url が "/media/..." なら centralServerUrlRaw と結合
+                    let fullImageUrl = imageUrl;
+                    if (!imageUrl.startsWith('http')) {
+                         // centralServerUrlRaw は "http://..." を含んでいる前提
+                         // 末尾のスラッシュ処理に注意
+                         const baseUrl = centralServerUrlRaw.replace(/\/$/, '');
+                         fullImageUrl = baseUrl + imageUrl;
+                    }
+
+                    const img = document.createElement('img');
+                    img.src = fullImageUrl;
+                    img.className = "max-w-full h-auto rounded-lg mb-2 border border-gray-400";
+                    contentP.appendChild(img);
+                }
+
+                // テキストがある場合の処理
+                if (message) {
+                    const textSpan = document.createElement('span');
+                    textSpan.innerHTML = urlify(escapeHtml(message));
+                    contentP.appendChild(textSpan);
+                }
+
 
                 // 要素の組み立て
                 msgDiv.appendChild(senderP);

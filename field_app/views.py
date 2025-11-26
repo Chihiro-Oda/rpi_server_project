@@ -200,7 +200,7 @@ def field_report_view(request):
 @login_required
 def field_chat_view(request):
     """
-    現場チャット画面の表示
+    現場チャット画面の表示（画像送信対応版）
     """
     # 選択されているグループIDを取得 (デフォルトは 'all')
     selected_group_id = request.GET.get('group_id', 'all')
@@ -210,24 +210,48 @@ def field_chat_view(request):
     # ---------------------------------------------------------
     if request.method == 'POST':
         group_id = request.POST.get('group_id')
+
+        # 権限チェック: 全体連絡は管理者のみ
         if group_id == 'all':
             if request.user.role not in ['admin', 'rescuer'] and not request.user.is_superuser:
                 messages.error(request, "全体連絡への送信権限がありません。")
                 return redirect(f"{reverse('field_app:field_chat')}?group_id={group_id}")
-        message = request.POST.get('message')
 
-        # group_id が 'all' の場合も、通常のグループと同様にAPIへ送信する
-        if group_id and message:
+        message = request.POST.get('message', '')
+        image_file = request.FILES.get('image')  # 画像ファイルを取得
+
+        # ★★★ 修正: メッセージ または 画像 があれば送信許可 ★★★
+        if group_id and (message or image_file):
             try:
                 headers = {'X-User-Login-Id': request.user.username}
-                # API側で group_id='all' を判定してブロードキャスト処理を行う
-                payload = {'group_id': group_id, 'message': message}
+
+                # ★★★ 修正: requests用のデータ構築 ★★★
+                # テキストデータは 'data' 引数に渡す辞書へ
+                data_payload = {
+                    'group_id': group_id,
+                    'message': message
+                }
+
+                # ファイルデータは 'files' 引数に渡す辞書へ
+                files_payload = {}
+                if image_file:
+                    # {'フォームのフィールド名': ファイルオブジェクト}
+                    files_payload = {'image': image_file}
 
                 api_url = config.CENTRAL_SERVER_URL + config.API_BASE_PATH + 'post-group-message/'
-                response = requests.post(api_url, headers=headers, json=payload, timeout=5)
+
+                # ★★★ 修正: json=... ではなく data=... と files=... を使う ★★★
+                # これにより Content-Type が multipart/form-data に自動設定されます
+                response = requests.post(
+                    api_url,
+                    headers=headers,
+                    data=data_payload,
+                    files=files_payload,
+                    timeout=10  # 画像送信を含むためタイムアウトを少し長めに
+                )
 
                 if response.status_code == 200:
-                    messages.success(request, "メッセージを送信しました。")
+                    messages.success(request, "送信しました。")
                 else:
                     # エラーレスポンスの解析
                     try:
@@ -236,11 +260,13 @@ def field_chat_view(request):
                         error_msg = f"HTTP {response.status_code}"
                     messages.error(request, f"送信エラー: {error_msg}")
 
-            except requests.exceptions.RequestException:
+            except requests.exceptions.RequestException as e:
+                # エラー詳細をログに出すなどしても良い
+                print(f"Connection Error: {e}")
                 messages.error(request, "サーバーに接続できず、メッセージを送信できませんでした。")
-                # 未送信メッセージとしてローカルDBに保存するロジック (UnsyncedChatMessage等)
+                # 将来的なTodo: 未送信メッセージとしてローカルDBに保存するロジック
         else:
-            messages.warning(request, "宛先グループとメッセージの両方を入力してください。")
+            messages.warning(request, "宛先グループと、メッセージまたは画像を入力してください。")
 
         # 選択していたグループIDを維持してリダイレクト
         return redirect(f"{reverse('field_app:field_chat')}?group_id={group_id}")
@@ -267,7 +293,6 @@ def field_chat_view(request):
     # ---------------------------------------------------------
     messages_history = []
 
-    # selected_group_id が存在すれば ('all' を含む)、APIから履歴を取得する
     if selected_group_id:
         try:
             headers = {'X-User-Login-Id': request.user.username}
@@ -280,7 +305,6 @@ def field_chat_view(request):
             if response.status_code == 200:
                 messages_history = response.json().get('messages', [])
             else:
-                # 403 Forbidden (権限なし) などの場合
                 try:
                     error_msg = response.json().get('message', '取得失敗')
                 except ValueError:
