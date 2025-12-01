@@ -32,15 +32,18 @@
                          class="bg-gray-800 h-64 rounded-lg flex items-center justify-center text-gray-500 border-4 border-dashed border-gray-600">
                         <video id="video" class="w-full h-full object-cover"></video>
                     </div>
-                    <!-- 後で消します -->
+                    <!-- ★追加: エラーメッセージ表示エリア -->
+                    <div id="status-message" class="text-center mt-2 font-semibold text-red-400 h-6"></div>
+
+                    <!-- 開発用パネル -->
                     <div class="mt-4 p-4 border rounded-lg bg-gray-800">
-                        <p class="text-sm text-yellow-300 mb-2">【開発用デバッグパネル】</p>
+                        <p class="text-sm text-yellow-300 mb-2">【手動入力パネル】</p>
                         <label for="manual_username" class="text-sm">Login IDを手動入力:</label>
                         <div class="flex">
                             <input type="text" id="manual_username"
-                                   class="p-2 rounded-l-md bg-gray-600 text-white flex-1">
+                                   class="p-2 rounded-l-md bg-gray-600 text-white flex-1" placeholder="user01">
                             <button type="button" id="manual_submit_btn"
-                                    class="p-2 rounded-r-md bg-yellow-500 text-black font-semibold">手動で判定
+                                    class="p-2 rounded-r-md bg-yellow-500 text-black font-semibold hover:bg-yellow-400">判定実行
                             </button>
                         </div>
                     </div>
@@ -61,52 +64,66 @@
 {% block body_extra %}
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
     <script>
-        // shelter_checkin.html とほぼ同じJavaScriptロジック
-        // handleQrCode関数がフォームを送信するだけ
         document.addEventListener('DOMContentLoaded', function () {
             const video = document.getElementById('video');
             const form = document.getElementById('distribution-form');
             const loginIdInput = document.getElementById('username_input');
-            // const manualInput = document.getElementById('manual_username');
-            // const manualBtn = document.getElementById('manual_submit_btn');
+            const statusMessage = document.getElementById('status-message'); // 追加した要素を取得
 
-            /* manualBtn.addEventListener('click', function () {
-                const loginId = manualInput.value.trim();
-                if (loginId) {
-                    handleQrCode(loginId);
-                } else {
-                    alert('Login IDを入力してください。');
-                }
-            }); */
+            // ★コメントアウトを解除し、正しく取得
+            const manualInput = document.getElementById('manual_username');
+            const manualBtn = document.getElementById('manual_submit_btn');
 
-            // ... (カメラ起動とtick関数のロジックはshelter_checkin.htmlからコピー)
+            // ★不足していた変数を定義
+            let lastQrCode = null;
+            let lastScanTime = 0;
 
+            // --- 共通処理: コードを受け取って送信 ---
             function handleQrCode(qrData) {
                 // select要素が選択されているかチェック
                 const selectedItemId = form.elements['item_id'].value;
                 if (!selectedItemId) {
                     alert('エラー: 先に配布物資を選択してください。');
-                    // 連続スキャンを防ぐためにクールダウンタイマーをリセット
-                    lastQrCode = null;
+                    lastQrCode = null; // リセット
                     return;
                 }
 
-                console.log(`Scanned QR: ${qrData}, Selected Item ID: ${selectedItemId}`);
+                // UIへのフィードバック
+                statusMessage.textContent = `ID: ${qrData} を照会中...`;
+
+                // フォームに値をセットして送信
                 loginIdInput.value = qrData;
-                form.submit(); // 読み取ったらすぐにフォームを送信
+                form.submit();
             }
 
-            navigator.mediaDevices.getUserMedia({video: {facingMode: "environment"}})
-                .then(function (stream) {
-                    video.srcObject = stream;
-                    video.setAttribute("playsinline", true); // iOS Safari対策
-                    video.play();
-                    requestAnimationFrame(tick);
-                })
-                .catch(function (err) {
-                    console.error("カメラへのアクセスエラー:", err);
-                    statusMessage.textContent = "カメラにアクセスできませんでした。";
+            // --- 手動入力ボタンのイベント ---
+            if (manualBtn) {
+                manualBtn.addEventListener('click', function () {
+                    const loginId = manualInput.value.trim();
+                    if (loginId) {
+                        handleQrCode(loginId);
+                    } else {
+                        alert('Login IDを入力してください。');
+                    }
                 });
+            }
+
+            // --- カメラ処理 ---
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                statusMessage.textContent = "カメラAPIが使用できません(HTTPSまたはlocalhostが必要です)";
+            } else {
+                navigator.mediaDevices.getUserMedia({video: {facingMode: "environment"}})
+                    .then(function (stream) {
+                        video.srcObject = stream;
+                        video.setAttribute("playsinline", true);
+                        video.play();
+                        requestAnimationFrame(tick);
+                    })
+                    .catch(function (err) {
+                        console.error("カメラエラー:", err);
+                        statusMessage.textContent = "カメラにアクセスできませんでした。";
+                    });
+            }
 
             function tick() {
                 if (video.readyState === video.HAVE_ENOUGH_DATA) {
@@ -117,14 +134,13 @@
                     canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
                     const imageData = canvas.getImageData(0, 0, canvasElement.width, canvasElement.height);
 
-                    // jsQRでQRコードをスキャン
                     const code = jsQR(imageData.data, imageData.width, imageData.height, {
                         inversionAttempts: "dontInvert",
                     });
 
                     if (code) {
-                        // 5秒間のクールダウン処理
                         const now = Date.now();
+                        // 5秒以内の重複読み取りを防止
                         if (code.data !== lastQrCode || now - lastScanTime > 5000) {
                             lastQrCode = code.data;
                             lastScanTime = now;
@@ -133,22 +149,6 @@
                     }
                 }
                 requestAnimationFrame(tick);
-            }
-
-
-            function handleQrCode(qrData) {
-                // select要素が選択されているかチェック
-                const selectedItemId = form.elements['item_id'].value;
-                if (!selectedItemId) {
-                    alert('エラー: 先に配布物資を選択してください。');
-                    // 連続スキャンを防ぐためにクールダウンタイマーをリセット
-                    lastQrCode = null;
-                    return;
-                }
-
-                console.log(`Scanned QR: ${qrData}, Selected Item ID: ${selectedItemId}`);
-                loginIdInput.value = qrData;
-                form.submit(); // 読み取ったらすぐにフォームを送信
             }
         });
     </script>
