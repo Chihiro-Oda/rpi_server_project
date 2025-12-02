@@ -172,3 +172,12 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.full_name or self.username
+
+
+class DistributionItem(models.Model):
+    """配布する物資の種類を管理するモデル（例：朝食、水、毛布）"""
+    name = models.CharField(verbose_name="物資名", max_length=100, unique=True)
+    description = models.TextField(verbose_name="説明", blank=True, null=True)
+
+    def __str__(self):
+        return self.name

@@ -3,6 +3,7 @@
 import requests
 from django.core.management.base import BaseCommand
 from django.db.models import Q
+from django.utils import timezone
 
 import config  # ラズパイ側のプロジェクトルートにある config.py
 from field_app.models import UnsyncedCheckin, UnsyncedFieldReport, UnsyncedUserRegistration, User
@@ -12,11 +13,12 @@ class Command(BaseCommand):
     help = '未同期のデータを中央サーバーに一括で送信します。'
 
     def handle(self, *args, **kwargs):
-        self.stdout.write(self.style.SUCCESS('===== データ同期処理を開始します ====='))
+        now = timezone.now().strftime('%Y-%m-%d %H:%M:%S')
+        self.stdout.write(self.style.SUCCESS(f'[{now}] ===== データ同期処理を開始します ====='))
 
         # ネットワーク接続があるか、まず最初に軽くチェック
         if not self.check_network_connection():
-            self.stderr.write(self.style.ERROR('ネットワークに接続できません。同期処理を中断します。'))
+            self.stderr.write(self.style.ERROR(f'[{now}] ネットワークに接続できません。同期処理を中断します。'))
             return
 
         # 1. 未同期の「新規ユーザー仮登録」を同期
@@ -28,7 +30,8 @@ class Command(BaseCommand):
         # 3. 未同期の「現場状況報告」を同期
         self.sync_field_reports()
 
-        self.stdout.write(self.style.SUCCESS('===== 全ての同期処理が完了しました ====='))
+        end_time = timezone.now().strftime('%H:%M:%S')
+        self.stdout.write(self.style.SUCCESS(f'[{end_time}] ===== 全ての同期処理が完了しました =====\n'))
 
     def check_network_connection(self):
         """中央サーバーのルートにアクセスできるか簡単な疎通確認を行う"""
@@ -51,6 +54,8 @@ class Command(BaseCommand):
         api_url = config.CENTRAL_SERVER_URL + config.API_BASE_PATH + 'shelter-checkin-sync/'
 
         for record in unsynced_records:
+            now_str = timezone.now().strftime('%H:%M:%S')
+
             payload = {
                 "username": record.username,
                 "shelter_management_id": config.SHELTER_ID,  # configから管理IDを取得
@@ -64,19 +69,19 @@ class Command(BaseCommand):
                     record.is_synced = True
                     record.last_sync_error = None
                     record.save()
-                    self.stdout.write(self.style.SUCCESS(f'  -> ID {record.id}: 同期成功'))
+                    self.stdout.write(self.style.SUCCESS(f'[{now_str}]   -> ID {record.id} ({record.username}): 同期成功'))
                 else:  # APIがエラーを返した場合
                     error_msg = response.json().get('message', '不明なサーバーエラー')
                     record.last_sync_error = f"HTTP {response.status_code}: {error_msg}"
                     record.sync_attempts += 1
                     record.save()
-                    self.stdout.write(self.style.ERROR(f'  -> ID {record.id}: 同期失敗 - {error_msg}'))
+                    self.stdout.write(self.style.ERROR(f'[{now_str}]   -> ID {record.id} ({record.username}): 同期失敗 - {error_msg}'))
 
             except requests.exceptions.RequestException as e:  # ネットワーク接続エラー
                 record.last_sync_error = f"ネットワークエラー: {e}"
                 record.sync_attempts += 1
                 record.save()
-                self.stdout.write(self.style.ERROR(f'  -> ID {record.id}: ネットワーク接続エラー'))
+                self.stdout.write(self.style.ERROR(f'[{now_str}]   -> ID {record.id} ({record.username}): ネットワーク接続エラー'))
                 self.stderr.write('中央サーバーへの接続が失われました。このタスクを中断します。')
                 break  # ネットワークが切れたら、このループは中断
 
