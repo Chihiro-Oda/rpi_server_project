@@ -14,7 +14,7 @@ class Command(BaseCommand):
         self.fetch_users()
 
     def fetch_distribution_items(self):
-        now = timezone.now().strftime('%Y-%m-%d %H:%M:%S')
+        now = timezone.localtime(timezone.now()).strftime('%Y-%m-%d %H:%M:%S')
         url = config.CENTRAL_SERVER_URL + config.API_BASE_PATH + 'distribution-items/'  # APIのURL
 
         try:
@@ -31,18 +31,18 @@ class Command(BaseCommand):
                         defaults={'description': item_data.get('description', '')},
                     )
 
-                end_time = timezone.now().strftime('%H:%M:%S')
+                end_time = timezone.localtime(timezone.now()).strftime('%H:%M:%S')
                 self.stdout.write(self.style.SUCCESS(f'[{end_time}]品目マスタを更新しました: {len(items)}件'))
             else:
-                end_time = timezone.now().strftime('%H:%M:%S')
+                end_time = timezone.localtime(timezone.now()).strftime('%H:%M:%S')
                 self.stderr.write(f'[{end_time}]取得失敗: {response.status_code}')
 
         except Exception as e:
-            end_time = timezone.now().strftime('%H:%M:%S')
+            end_time = timezone.localtime(timezone.now()).strftime('%H:%M:%S')
             self.stderr.write(f'[{end_time}]通信エラー: {e}')
 
     def fetch_users(self):
-        now = timezone.now().strftime('%Y-%m-%d %H:%M:%S')
+        now = timezone.localtime(timezone.now()).strftime('%Y-%m-%d %H:%M:%S')
         self.stdout.write(self.style.SUCCESS(f'[{now}]--- ユーザー情報の同期 ---'))
         url = config.CENTRAL_SERVER_URL + config.API_BASE_PATH + 'get-all-users/'
 
@@ -75,7 +75,7 @@ class Command(BaseCommand):
 
                 # 出力時に好きな属性を取り出して整形する
                 if created_user_objects:
-                    end_time = timezone.now().strftime('%H:%M:%S')
+                    end_time = timezone.localtime(timezone.now()).strftime('%H:%M:%S')
 
                     # オブジェクトのリストから、必要な情報だけを抽出して文字列リストを作る
 
@@ -96,9 +96,9 @@ class Command(BaseCommand):
                     ))
 
             else:
-                end_time = timezone.now().strftime('%H:%M:%S')
+                end_time = timezone.localtime(timezone.now()).strftime('%H:%M:%S')
                 self.stderr.write(f'[{end_time}]取得失敗: HTTP {response.status_code}')
 
         except Exception as e:
-            end_time = timezone.now().strftime('%H:%M:%S')
+            end_time = timezone.localtime(timezone.now()).strftime('%H:%M:%S')
             self.stderr.write(f'[{end_time}]通信エラー: {e}')

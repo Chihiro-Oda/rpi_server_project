@@ -13,7 +13,7 @@ class Command(BaseCommand):
     help = '未同期のデータを中央サーバーに一括で送信します。'
 
     def handle(self, *args, **kwargs):
-        now = timezone.now().strftime('%Y-%m-%d %H:%M:%S')
+        now = timezone.localtime(timezone.now()).strftime('%Y-%m-%d %H:%M:%S')
         self.stdout.write(self.style.SUCCESS(f'[{now}] ===== データ同期処理を開始します ====='))
 
         # ネットワーク接続があるか、まず最初に軽くチェック
@@ -30,7 +30,7 @@ class Command(BaseCommand):
         # 3. 未同期の「現場状況報告」を同期
         self.sync_field_reports()
 
-        end_time = timezone.now().strftime('%H:%M:%S')
+        end_time = timezone.localtime(timezone.now()).strftime('%H:%M:%S')
         self.stdout.write(self.style.SUCCESS(f'[{end_time}] ===== 全ての同期処理が完了しました =====\n'))
 
     def check_network_connection(self):
@@ -54,7 +54,7 @@ class Command(BaseCommand):
         api_url = config.CENTRAL_SERVER_URL + config.API_BASE_PATH + 'shelter-checkin-sync/'
 
         for record in unsynced_records:
-            now_str = timezone.now().strftime('%H:%M:%S')
+            now_str = timezone.localtime(timezone.now()).strftime('%H:%M:%S')
 
             payload = {
                 "username": record.username,
