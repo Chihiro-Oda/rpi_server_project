@@ -10,7 +10,7 @@ class FieldUserAdmin(UserAdmin):
 
     # 編集画面のフィールド構成（標準のUserAdminの設定に、カスタムフィールドを追加）
     fieldsets = UserAdmin.fieldsets + (
-        ('現場用カスタム情報', {'fields': ('role', 'safety_status')}),
+        ('現場用カスタム情報', {'fields': ('full_name', 'role', 'safety_status')}),
     )
 
     # ユーザー作成画面のフィールド構成
