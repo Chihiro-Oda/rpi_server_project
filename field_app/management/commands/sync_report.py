@@ -42,7 +42,7 @@ class Command(BaseCommand):
                 "device_id": config.DEVICE_ID
             }
             try:
-                response = requests.post(api_url, json=payload, timeout=10)
+                response = requests.post(api_url, json=payload, timeout=10, verify=config.VERIFY_SSL)
                 if response.status_code in [200, 201]:
                     report.is_synced = True
                     # report.last_sync_error = None # モデルにフィールドを追加した場合
@@ -84,7 +84,7 @@ class Command(BaseCommand):
                 "device_id": config.DEVICE_ID
             }
             try:
-                response = requests.post(api_url, json=payload, timeout=10)
+                response = requests.post(api_url, json=payload, timeout=10, verify=config.VERIFY_SSL)
                 if response.status_code in [200, 201]:
                     checkin.is_synced = True
                     checkin.last_sync_error = None
