@@ -36,7 +36,8 @@ class Command(BaseCommand):
     def check_network_connection(self):
         """中央サーバーのルートにアクセスできるか簡単な疎通確認を行う"""
         try:
-            requests.get(config.CENTRAL_SERVER_URL, timeout=5)
+            # SSL証明書の検証設定を config.py から読み込む
+            requests.get(config.CENTRAL_SERVER_URL, timeout=5, verify=config.VERIFY_SSL)
             return True
         except requests.exceptions.RequestException:
             return False
@@ -64,7 +65,7 @@ class Command(BaseCommand):
                 "device_id": config.DEVICE_ID
             }
             try:
-                response = requests.post(api_url, json=payload, timeout=10)
+                response = requests.post(api_url, json=payload, timeout=10, verify=config.VERIFY_SSL)
                 if response.status_code in [200, 201]:  # 成功 (201 Created も考慮)
                     record.is_synced = True
                     record.last_sync_error = None
@@ -107,7 +108,7 @@ class Command(BaseCommand):
                 "device_id": config.DEVICE_ID
             }
             try:
-                response = requests.post(api_url, json=payload, timeout=10)
+                response = requests.post(api_url, json=payload, timeout=10, verify=config.VERIFY_SSL)
                 if response.status_code in [200, 201]:
                     record.is_synced = True
                     record.save()
@@ -141,7 +142,7 @@ class Command(BaseCommand):
                 "password": user_reg.password,  # ハッシュ済みのパスワードを送る
             }
             try:
-                response = requests.post(api_url, json=payload, timeout=10)
+                response = requests.post(api_url, json=payload, timeout=10, verify=config.VERIFY_SSL)
 
                 # ★ 変更点: JSONデコードを try の中ではなく、ステータスコード確認後に行う
                 if response.status_code == 201:  # 成功
@@ -187,4 +188,3 @@ class Command(BaseCommand):
                 self.stderr.write(f'詳細: {str(e)}')
                 self.stderr.write('中央サーバーへの接続が失われました。このタスクを中断します。')
                 break
-

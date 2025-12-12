@@ -1,8 +1,13 @@
 # rpi_server_project/config.py
 
 # --- 接続先の中央サーバー設定 ---
-# このURLの末尾には / を付けないのが一般的
-CENTRAL_SERVER_URL = "http://127.0.0.1:8000"  # 開発中はローカルPC、本番では実際のサーバーIPやドメインに変更
+# ポート8000ではなく、標準のHTTPSポート(443)を使用
+# IPアドレス直打ちのため、SSL証明書エラーが出る可能性があります
+CENTRAL_SERVER_URL = "https://54.236.101.217"
+
+# SSL証明書の検証を行うかどうか
+# IPアドレスでアクセスする場合や自己署名証明書の場合は False に設定
+VERIFY_SSL = False
 
 # APIのベースパス
 API_BASE_PATH = "/api/"
