@@ -202,23 +202,28 @@ def field_chat_view(request):
     """
     現場チャット画面の表示（画像送信対応版）
     """
+    print(f"DEBUG: field_chat_view called. Method: {request.method}, User: {request.user.username}")
     # 選択されているグループIDを取得 (デフォルトは 'all')
     selected_group_id = request.GET.get('group_id', 'all')
+    print(f"DEBUG: Selected group ID: {selected_group_id}")
 
     # ---------------------------------------------------------
     # 1. メッセージ送信処理 (POST)
     # ---------------------------------------------------------
     if request.method == 'POST':
+        print("DEBUG: Handling POST request for chat message.")
         group_id = request.POST.get('group_id')
 
         # 権限チェック: 全体連絡は管理者のみ
         if group_id == 'all':
             if request.user.role not in ['admin', 'rescuer'] and not request.user.is_superuser:
                 messages.error(request, "全体連絡への送信権限がありません。")
+                print(f"DEBUG: Permission denied for user {request.user.username} to send to group 'all'.")
                 return redirect(f"{reverse('field_app:field_chat')}?group_id={group_id}")
 
         message = request.POST.get('message', '')
         image_file = request.FILES.get('image')  # 画像ファイルを取得
+        print(f"DEBUG: Group ID: {group_id}, Message: '{message[:50]}...', Image file present: {bool(image_file)}")
 
         # ★★★ 修正: メッセージ または 画像 があれば送信許可 ★★★
         if group_id and (message or image_file):
@@ -239,6 +244,10 @@ def field_chat_view(request):
                     files_payload = {'image': image_file}
 
                 api_url = config.CENTRAL_SERVER_URL + config.API_BASE_PATH + 'post-group-message/'
+                print(f"DEBUG: Sending chat message to API: {api_url}")
+                print(f"DEBUG: Headers: {headers}")
+                print(f"DEBUG: Data payload: {data_payload}")
+                print(f"DEBUG: Files payload keys: {files_payload.keys()}")
 
                 # ★★★ 修正: json=... ではなく data=... と files=... を使う ★★★
                 # これにより Content-Type が multipart/form-data に自動設定されます
@@ -247,11 +256,14 @@ def field_chat_view(request):
                     headers=headers,
                     data=data_payload,
                     files=files_payload,
-                    timeout=10  # 画像送信を含むためタイムアウトを少し長めに
+                    timeout=10,  # 画像送信を含むためタイムアウトを少し長めに
+                    verify=config.VERIFY_SSL # SSL検証設定を追加
                 )
+                print(f"DEBUG: Chat API response status code: {response.status_code}")
 
                 if response.status_code == 200:
                     messages.success(request, "送信しました。")
+                    print("DEBUG: Chat message sent successfully.")
                 else:
                     # エラーレスポンスの解析
                     try:
@@ -259,14 +271,16 @@ def field_chat_view(request):
                     except ValueError:
                         error_msg = f"HTTP {response.status_code}"
                     messages.error(request, f"送信エラー: {error_msg}")
+                    print(f"DEBUG: Chat message send error: {error_msg}")
 
             except requests.exceptions.RequestException as e:
                 # エラー詳細をログに出すなどしても良い
-                print(f"Connection Error: {e}")
+                print(f"DEBUG: Connection Error during chat message send: {e}")
                 messages.error(request, "サーバーに接続できず、メッセージを送信できませんでした。")
                 # 将来的なTodo: 未送信メッセージとしてローカルDBに保存するロジック
         else:
             messages.warning(request, "宛先グループと、メッセージまたは画像を入力してください。")
+            print("DEBUG: Missing group ID, message, or image file.")
 
         # 選択していたグループIDを維持してリダイレクト
         return redirect(f"{reverse('field_app:field_chat')}?group_id={group_id}")
@@ -275,17 +289,23 @@ def field_chat_view(request):
     # 2. グループリストの取得
     # ---------------------------------------------------------
     groups = []
+    print("DEBUG: Fetching group list.")
     try:
         headers = {'X-User-Login-Id': request.user.username}
         api_url = config.CENTRAL_SERVER_URL + config.API_BASE_PATH + 'get-user-groups/'
-        response = requests.get(api_url, headers=headers, timeout=5)
+        print(f"DEBUG: Group list API URL: {api_url}, Headers: {headers}")
+        response = requests.get(api_url, headers=headers, timeout=5, verify=config.VERIFY_SSL) # SSL検証設定を追加
 
+        print(f"DEBUG: Group list API response status code: {response.status_code}")
         if response.status_code == 200:
             groups = response.json().get('groups', [])
+            print(f"DEBUG: Successfully fetched {len(groups)} groups.")
         else:
             messages.error(request, f"グループ情報の取得に失敗しました: {response.status_code}")
+            print(f"DEBUG: Failed to fetch groups: {response.status_code}, Response: {response.text}")
 
-    except requests.exceptions.RequestException:
+    except requests.exceptions.RequestException as e:
+        print(f"DEBUG: Connection Error during group list fetch: {e}")
         messages.error(request, "中央サーバーに接続できず、グループ情報を取得できませんでした。")
 
     # ---------------------------------------------------------
@@ -294,24 +314,30 @@ def field_chat_view(request):
     messages_history = []
 
     if selected_group_id:
+        print(f"DEBUG: Fetching message history for group: {selected_group_id}")
         try:
             headers = {'X-User-Login-Id': request.user.username}
 
             # URL構築: groups/all/messages/ または groups/1/messages/
             api_url = f"{config.CENTRAL_SERVER_URL}{config.API_BASE_PATH}groups/{selected_group_id}/messages/"
+            print(f"DEBUG: Message history API URL: {api_url}, Headers: {headers}")
 
-            response = requests.get(api_url, headers=headers, timeout=5)
+            response = requests.get(api_url, headers=headers, timeout=5, verify=config.VERIFY_SSL) # SSL検証設定を追加
+            print(f"DEBUG: Message history API response status code: {response.status_code}")
 
             if response.status_code == 200:
                 messages_history = response.json().get('messages', [])
+                print(f"DEBUG: Successfully fetched {len(messages_history)} messages for group {selected_group_id}.")
             else:
                 try:
                     error_msg = response.json().get('message', '取得失敗')
                 except ValueError:
                     error_msg = f"HTTP {response.status_code}"
                 messages.error(request, f"履歴取得エラー: {error_msg}")
+                print(f"DEBUG: Failed to fetch message history: {error_msg}, Response: {response.text}")
 
-        except requests.exceptions.RequestException:
+        except requests.exceptions.RequestException as e:
+            print(f"DEBUG: Connection Error during message history fetch: {e}")
             messages.error(request, "サーバーに接続できず、メッセージ履歴を取得できませんでした。")
 
     context = {
@@ -322,6 +348,7 @@ def field_chat_view(request):
         'current_username': request.user.username,  # 自分の判定用
         'current_fullname': request.user.full_name,  # 自分の判定用
     }
+    print("DEBUG: Rendering field_chat.html with context.")
     return render(request, 'field_app/field_chat.html', context)
 
 

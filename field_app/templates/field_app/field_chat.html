@@ -250,79 +250,9 @@
             // --- 3. フォーム送信処理 (即時反映 & POST送信) ---
             if(chatForm){
                 chatForm.onsubmit = function (e) {
-                    e.preventDefault(); // デフォルトのPOST送信を止める
-
-                    if (submitBtn.disabled) return; // 連打防止
-
-                    const message = messageInput.value;
-                    const imageFile = imageInput ? imageInput.files[0] : null;
-
-                    if (message.trim() === '' && !imageFile) return;
-
-                    // ボタン無効化
-                    submitBtn.disabled = true;
-                    submitBtn.textContent = '送信中...';
-                    submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
-
-                    // A. 即時反映 (仮表示)
-                    const tempId = 'temp-' + Date.now();
-                    let previewUrl = null;
-                    if (imageFile) previewUrl = URL.createObjectURL(imageFile);
-
-                    // ※ラズパイからは自分のフルネームが即座に取れない場合があるので、とりあえずIDか現在名を表示
-                    appendMessage(tempId, currentUsername, message, previewUrl, currentFullname, true);
-
-                    // B. サーバーへ送信 (POST)
-                    // field_chat_view の実装に合わせて FormData を送る
-                    // ※ ここではHTMLフォームの action ではなく、fetch で API (またはView) を叩く必要あり
-                    //   現状の views.py は POST 後に redirect する作りなので、fetch で呼ぶとリダイレクト先(HTML)が返ってきてしまう。
-                    //   ★対策: field_chat_view を叩いてリロードさせるか、APIを直接叩くか。
-                    //   メインサーバーと同じUXにするなら「APIを叩く」のが正解ですが、ラズパイのView構造を変えるのが手間なら
-                    //   「フォームを普通にsubmitする（即時反映なし）」に戻すのも手です。
-
-                    //   ここでは「即時反映UX」を実現するため、form.submit() ではなく fetch で API を叩く実装にします。
-                    //   config.CENTRAL_SERVER_URL + ...post-group-message/ を叩きます。
-
-                    const formData = new FormData();
-                    formData.append('group_id', groupId);
-                    formData.append('message', message);
-                    if (imageFile) formData.append('image', imageFile);
-
-                    // ラズパイ→中央サーバーへのAPI URLを作成
-                    // "http://54.xx.xx.xx:8000/api/post-group-message/"
-                    const baseUrl = centralServerUrlRaw.replace(/\/$/, '');
-                    const apiUrl = baseUrl + '/api/post-group-message/';
-
-                    fetch(apiUrl, {
-                        method: 'POST',
-                        body: formData,
-                        headers: {
-                            // ラズパイからの認証用ヘッダー
-                            'X-User-Login-Id': currentUsername
-                            // 'Content-Type': multipart/form-data は自動設定
-                        }
-                    })
-                    .then(response => {
-                        if (response.ok) {
-                            messageInput.value = '';
-                            if(imageInput) imageInput.value = '';
-                            messageInput.style.height = 'auto';
-                        } else {
-                            console.error('送信エラー', response);
-                            alert('送信に失敗しました。オフラインの可能性があります。');
-                            // 仮表示を消すなどのロールバック処理が理想
-                        }
-                    })
-                    .catch(error => {
-                        console.error('通信エラー:', error);
-                        alert('通信エラーが発生しました。');
-                    })
-                    .finally(() => {
-                        submitBtn.disabled = false;
-                        submitBtn.textContent = '送信';
-                        submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-                        messageInput.focus();
-                    });
+                    // このフォームはPOSTリクエストを送信し、view側で処理されるため、
+                    // WebSocketとは直接関係ありません。
+                    // そのため、ここではデフォルトの動作を許可します。
                 };
             }
 
@@ -334,42 +264,37 @@
 
             if (groupId) {
                 const wsUrl = wsProtocol + host + '/ws/chat/group/' + groupId + '/';
-                console.log("Connecting WS URL:", wsUrl); // ★接続先URLを確認
+                console.log("DEBUG: Connecting to WebSocket:", wsUrl); // ★接続先URLを確認
 
                 const chatSocket = new WebSocket(wsUrl);
 
                 chatSocket.onopen = function(e) {
-                    console.log("★WebSocket Connected!"); // ★接続成功ログ
+                    console.log("DEBUG: WebSocket connection established successfully!"); // ★接続成功ログ
                 };
 
                 chatSocket.onclose = function(e) {
-                    console.error("★WebSocket Closed unexpectedly. Code:", e.code, "Reason:", e.reason);
+                    console.error("DEBUG: WebSocket connection closed.", "Code:", e.code, "Reason:", e.reason, "Was clean:", e.wasClean); // ★切断ログ
                 };
 
                 chatSocket.onerror = function(err) {
-                    console.error("★WebSocket Error:", err);
+                    console.error("DEBUG: WebSocket error occurred:", err); // ★エラーログ
                 };
 
                 chatSocket.onmessage = function(e) {
                     const data = JSON.parse(e.data);
+                    console.log("DEBUG: WebSocket message received:", data); // ★データ受信ログ
 
-                    // ★データ受信ログ
-                    console.log("WebSocket受信:", data);
-                    console.log("自分(JS):", currentUsername, " 送信者(Server):", data.sender);
-                    console.log("判定結果:", data.sender === currentUsername);
-
-                    if (data.type === 'delete') {
-                        const el = document.getElementById('msg-' + data.message_id);
-                        if(el) el.remove();
-                    } else {
-                        // 二重表示防止: 自分のIDで返ってきた場合、仮表示を消す
-                        if (data.sender === currentUsername) {
-                            console.log("自分のメッセージなので仮表示を消します");
-                            const tempMsgs = document.querySelectorAll('.message-temp');
-                            tempMsgs.forEach(el => el.remove());
+                    // 自分のメッセージはPOSTリクエストのレスポンスで画面リロードされるので、
+                    // WebSocketで受信したメッセージが自分のものでない場合のみ画面に追加する
+                    if (data.sender !== currentUsername) {
+                         if (data.type === 'delete') {
+                            const el = document.getElementById('msg-' + data.message_id);
+                            if(el) el.remove();
+                        } else {
+                            appendMessage(data.id, data.sender, data.message, data.image_url, data.sender_full_name);
                         }
-
-                        appendMessage(data.id, data.sender, data.message, data.image_url, data.sender_full_name);
+                    } else {
+                        console.log("DEBUG: Received own message, ignoring to prevent duplication.");
                     }
                 };
             }
