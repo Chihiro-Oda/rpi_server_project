@@ -27,7 +27,7 @@ urlpatterns = [
     path('manual-sync/', views.manual_sync_view, name='manual_sync'),
 
     path('unsynced-users/', views.unsynced_users_list_view, name='unsynced_users_list'),
-    path('unsynced-users/<int:pk>/edit/', views.unsynced_user_edit_view, name='unsynced_user_edit'),
+    path('unsynced-users/<uuid:pk>/edit/', views.unsynced_user_edit_view, name='unsynced_user_edit'),
 
     path('signup/', views.field_signup_view, name='signup'),
 
