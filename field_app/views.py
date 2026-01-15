@@ -13,6 +13,7 @@ from django.views.decorators.http import require_POST
 import config
 from .forms import FieldReportForm, UnsyncedUserEditForm, FieldSignUpForm
 from .models import UnsyncedCheckin, UnsyncedFieldReport, UnsyncedUserRegistration
+from .utils import get_active_central_url
 
 
 @login_required  # ログインしていないとアクセスできないようにする
@@ -120,7 +121,7 @@ def get_distribution_items():
     """（ヘルパー関数）中央サーバーから配布物資のリストを取得する"""
     try:
         # このAPIは別途作成する必要がある
-        response = requests.get(config.CENTRAL_SERVER_URL + "/api/distribution-items/", timeout=3)
+        response = requests.get(get_active_central_url() + "/api/distribution-items/", timeout=3)
         if response.status_code == 200:
             return response.json().get('items', [])
     except requests.exceptions.RequestException:
@@ -152,7 +153,7 @@ def food_distribution_view(request):
                 'device_id': config.DEVICE_ID,
                 'action': 'record'  # 判定と記録を同時に行う
             }
-            api_url = config.CENTRAL_SERVER_URL + config.API_BASE_PATH + 'check-distribution/'
+            api_url = get_active_central_url() + config.API_BASE_PATH + 'check-distribution/'
             response = requests.post(api_url, json=payload, timeout=5)
 
             api_result = response.json()
@@ -243,7 +244,7 @@ def field_chat_view(request):
                     # {'フォームのフィールド名': ファイルオブジェクト}
                     files_payload = {'image': image_file}
 
-                api_url = config.CENTRAL_SERVER_URL + config.API_BASE_PATH + 'post-group-message/'
+                api_url = get_active_central_url() + config.API_BASE_PATH + 'post-group-message/'
                 print(f"DEBUG: Sending chat message to API: {api_url}")
                 print(f"DEBUG: Headers: {headers}")
                 print(f"DEBUG: Data payload: {data_payload}")
@@ -292,7 +293,7 @@ def field_chat_view(request):
     print("DEBUG: Fetching group list.")
     try:
         headers = {'X-User-Login-Id': request.user.username}
-        api_url = config.CENTRAL_SERVER_URL + config.API_BASE_PATH + 'get-user-groups/'
+        api_url = get_active_central_url() + config.API_BASE_PATH + 'get-user-groups/'
         print(f"DEBUG: Group list API URL: {api_url}, Headers: {headers}")
         response = requests.get(api_url, headers=headers, timeout=5, verify=config.VERIFY_SSL) # SSL検証設定を追加
 
@@ -319,7 +320,7 @@ def field_chat_view(request):
             headers = {'X-User-Login-Id': request.user.username}
 
             # URL構築: groups/all/messages/ または groups/1/messages/
-            api_url = f"{config.CENTRAL_SERVER_URL}{config.API_BASE_PATH}groups/{selected_group_id}/messages/"
+            api_url = f"{get_active_central_url()}{config.API_BASE_PATH}groups/{selected_group_id}/messages/"
             print(f"DEBUG: Message history API URL: {api_url}, Headers: {headers}")
 
             response = requests.get(api_url, headers=headers, timeout=5, verify=config.VERIFY_SSL) # SSL検証設定を追加
@@ -344,7 +345,7 @@ def field_chat_view(request):
         'groups': groups,
         'selected_group_id': selected_group_id,
         'messages_history': messages_history,
-        'central_server_url': config.CENTRAL_SERVER_URL,
+        'central_server_url': get_active_central_url(),
         'current_username': request.user.username,  # 自分の判定用
         'current_fullname': request.user.full_name,  # 自分の判定用
     }

@@ -7,6 +7,7 @@ from django.utils import timezone
 
 import config  # ラズパイ側のプロジェクトルートにある config.py
 from field_app.models import UnsyncedCheckin, UnsyncedFieldReport, UnsyncedUserRegistration, User
+from field_app.utils import get_active_central_url
 
 
 class Command(BaseCommand):
@@ -37,7 +38,7 @@ class Command(BaseCommand):
         """中央サーバーのルートにアクセスできるか簡単な疎通確認を行う"""
         try:
             # SSL証明書の検証設定を config.py から読み込む
-            requests.get(config.CENTRAL_SERVER_URL, timeout=5, verify=config.VERIFY_SSL)
+            requests.get(get_active_central_url(), timeout=5, verify=config.VERIFY_SSL)
             return True
         except requests.exceptions.RequestException:
             return False
@@ -52,7 +53,7 @@ class Command(BaseCommand):
             return
 
         self.stdout.write(f'{len(unsynced_records)}件の未同期チェックインを同期します...')
-        api_url = config.CENTRAL_SERVER_URL + config.API_BASE_PATH + 'shelter-checkin-sync/'
+        api_url = get_active_central_url() + config.API_BASE_PATH + 'shelter-checkin-sync/'
 
         for record in unsynced_records:
             now_str = timezone.localtime(timezone.now()).strftime('%H:%M:%S')
@@ -96,7 +97,7 @@ class Command(BaseCommand):
             return
 
         self.stdout.write(f'{len(unsynced_records)}件の未同期レポートを同期します...')
-        api_url = config.CENTRAL_SERVER_URL + config.API_BASE_PATH + 'field-report/'
+        api_url = get_active_central_url() + config.API_BASE_PATH + 'field-report/'
 
         for record in unsynced_records:
             payload = {
@@ -133,7 +134,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS('同期対象の仮登録ユーザーはいませんでした。'))
             return
 
-        api_url = config.CENTRAL_SERVER_URL + config.API_BASE_PATH + 'register-field-user/'
+        api_url = get_active_central_url() + config.API_BASE_PATH + 'register-field-user/'
 
         for user_reg in unsynced_users:
             payload = {

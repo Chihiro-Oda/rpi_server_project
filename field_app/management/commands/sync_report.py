@@ -4,6 +4,7 @@ from django.core.management.base import BaseCommand
 
 import config
 from field_app.models import UnsyncedFieldReport, UnsyncedCheckin  # UnsyncedCheckin をインポート
+from field_app.utils import get_active_central_url
 
 
 class Command(BaseCommand):
@@ -30,7 +31,7 @@ class Command(BaseCommand):
             return
 
         self.stdout.write(f'{len(unsynced_reports)}件の未同期レポートを同期します...')
-        api_url = config.CENTRAL_SERVER_URL + config.API_BASE_PATH + 'field-report/'
+        api_url = get_active_central_url() + config.API_BASE_PATH + 'field-report/'
 
         for report in unsynced_reports:
             payload = {
@@ -73,7 +74,7 @@ class Command(BaseCommand):
 
         self.stdout.write(f'{len(unsynced_checkins)}件の未同期チェックインを同期します...')
         # ★★★ 中央サーバー側のAPIエンドポイントに合わせて修正してください ★★★
-        api_url = config.CENTRAL_SERVER_URL + config.API_BASE_PATH + 'shelter-checkin-sync/'
+        api_url = get_active_central_url() + config.API_BASE_PATH + 'shelter-checkin-sync/'
 
         for checkin in unsynced_checkins:
             payload = {

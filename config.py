@@ -1,13 +1,17 @@
 # rpi_server_project/config.py
 
 # --- 接続先の中央サーバー設定 ---
-# IPアドレスではなくドメイン名を使用することで、SSL証明書エラーを回避し、
-# Nginxのバーチャルホスト設定に正しくマッチさせます。
-CENTRAL_SERVER_URL = "https://sotsusotsu.com"
+# ポート8000ではなく、標準のHTTPSポート(443)を使用
+# IPアドレス直打ちのため、SSL証明書エラーが出る可能性があります
+CENTRAL_SERVER_URLS = [
+    "http://34.236.210.19:8000",  # 1. 新サーバー (優先)
+    "https://sotsuken-sub.com/",     # 2. 新ドメイン (DNS浸透後用)
+    "http://54.236.101.217:8000",  # 3. 旧サーバー (予備・移行期間用)
+    "https://sotsusotsu.com",
+]
 
 # SSL証明書の検証を行うかどうか
-# True (ブール値) または False (ブール値) を指定してください。文字列の "true" は不可です。
-# 証明書の状態が不明な場合は一旦 False のままでも動作します。
+# IPアドレスでアクセスする場合や自己署名証明書の場合は False に設定
 VERIFY_SSL = False
 
 # APIのベースパス

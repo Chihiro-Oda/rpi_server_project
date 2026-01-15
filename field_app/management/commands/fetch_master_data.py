@@ -4,6 +4,7 @@ from django.utils import timezone
 
 from field_app.models import DistributionItem, User  # ラズパイ側のモデル
 import config
+from field_app.utils import get_active_central_url
 
 
 class Command(BaseCommand):
@@ -25,7 +26,7 @@ class Command(BaseCommand):
         self.stdout.write(f'[{now}] 配布品目を同期中...')
 
         # APIのURL
-        url = config.CENTRAL_SERVER_URL + config.API_BASE_PATH + 'distribution-items/'
+        url = get_active_central_url() + config.API_BASE_PATH + 'distribution-items/'
 
         try:
             response = requests.get(url, timeout=10)
@@ -56,7 +57,7 @@ class Command(BaseCommand):
         now = timezone.localtime(timezone.now()).strftime('%Y-%m-%d %H:%M:%S')
         self.stdout.write(self.style.SUCCESS(f'[{now}]--- ユーザー情報の同期 ---'))
 
-        url = config.CENTRAL_SERVER_URL + config.API_BASE_PATH + 'get-all-users/'
+        url = get_active_central_url() + config.API_BASE_PATH + 'get-all-users/'
 
         try:
             response = requests.get(url, timeout=15)
